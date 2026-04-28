@@ -35,7 +35,7 @@ const (
 const (
 	EnvCircleToken      = "CIRCLE_TOKEN"
 	EnvCircleCIToken    = "CIRCLECI_TOKEN"
-	EnvCircleCIBaseURL  = "CIRCLECI_BASE_URL"
+	EnvCircleHost       = "CIRCLE_HOST"
 	EnvAnthropicAPIKey  = "ANTHROPIC_API_KEY"
 	EnvAnthropicBaseURL = "ANTHROPIC_BASE_URL"
 	EnvGitHubToken      = "GITHUB_TOKEN"
@@ -62,7 +62,7 @@ const (
 type EnvVars struct {
 	CircleToken      string `env:"CIRCLE_TOKEN"`
 	CircleCIToken    string `env:"CIRCLECI_TOKEN"`
-	CircleCIBaseURL  string `env:"CIRCLECI_BASE_URL,default=https://circleci.com"`
+	CircleHost       string `env:"CIRCLE_HOST,default=https://circleci.com"`
 	AnthropicAPIKey  string `env:"ANTHROPIC_API_KEY"`
 	AnthropicBaseURL string `env:"ANTHROPIC_BASE_URL,default=https://api.anthropic.com"`
 	GitHubToken      string `env:"GITHUB_TOKEN"`
@@ -176,7 +176,7 @@ func Clear(key string) error {
 		keychainKey = keyring.AnthropicKeyKey(env.AnthropicBaseURL)
 	case "circleCIToken":
 		cfg.CircleCIToken = ""
-		keychainKey = keyring.CircleCITokenKey(env.CircleCIBaseURL)
+		keychainKey = keyring.CircleCITokenKey(env.CircleHost)
 	case "gitHubToken":
 		cfg.GitHubToken = ""
 		keychainKey = keyring.GitHubTokenKey(env.GitHubAPIURL)
@@ -185,6 +185,68 @@ func Clear(key string) error {
 	}
 	_ = keyring.Delete(keychainKey) // best-effort
 	return Save(cfg)
+}
+
+func resolveCircleCIToken(rc *ResolvedConfig, cfg UserConfig, env EnvVars) {
+	if val, ok := os.LookupEnv(EnvCircleToken); ok {
+		rc.CircleCIToken = val
+		rc.CircleCITokenSource = "Environment variable (" + EnvCircleToken + ")"
+		return
+	}
+	if val, ok := os.LookupEnv(EnvCircleCIToken); ok {
+		rc.CircleCIToken = val
+		rc.CircleCITokenSource = "Environment variable (" + EnvCircleCIToken + ")"
+		return
+	}
+	// No env var present: check keychain then file.
+	if val, _ := keyring.Get(keyring.CircleCITokenKey(env.CircleHost)); val != "" {
+		rc.CircleCIToken = val
+		rc.CircleCITokenSource = SourceKeychain
+		return
+	}
+	if cfg.CircleCIToken != "" {
+		rc.CircleCIToken = cfg.CircleCIToken
+		rc.CircleCITokenSource = SourceConfigFile
+	}
+}
+
+func resolveAnthropicKey(rc *ResolvedConfig, cfg UserConfig, env EnvVars, flagAPIKey string) {
+	if flagAPIKey != "" {
+		rc.AnthropicAPIKey = flagAPIKey
+		rc.AnthropicAPIKeySource = "Flag"
+		return
+	}
+	if val, ok := os.LookupEnv(EnvAnthropicAPIKey); ok {
+		rc.AnthropicAPIKey = val
+		rc.AnthropicAPIKeySource = "Environment variable"
+		return
+	}
+	if val, _ := keyring.Get(keyring.AnthropicKeyKey(env.AnthropicBaseURL)); val != "" {
+		rc.AnthropicAPIKey = val
+		rc.AnthropicAPIKeySource = SourceKeychain
+		return
+	}
+	if cfg.AnthropicAPIKey != "" {
+		rc.AnthropicAPIKey = cfg.AnthropicAPIKey
+		rc.AnthropicAPIKeySource = SourceConfigFile
+	}
+}
+
+func resolveGitHubToken(rc *ResolvedConfig, cfg UserConfig, env EnvVars) {
+	if val, ok := os.LookupEnv(EnvGitHubToken); ok {
+		rc.GitHubToken = val
+		rc.GitHubTokenSource = "Environment variable (" + EnvGitHubToken + ")"
+		return
+	}
+	if val, _ := keyring.Get(keyring.GitHubTokenKey(env.GitHubAPIURL)); val != "" {
+		rc.GitHubToken = val
+		rc.GitHubTokenSource = SourceKeychain
+		return
+	}
+	if cfg.GitHubToken != "" {
+		rc.GitHubToken = cfg.GitHubToken
+		rc.GitHubTokenSource = SourceConfigFile
+	}
 }
 
 // Resolve computes the final config from flags, env, and file.
@@ -203,53 +265,13 @@ func Resolve(flagAPIKey, flagModel string) (ResolvedConfig, error) {
 		PromptModel:  PromptModel,
 	}
 
-	switch {
-	case env.CircleToken != "":
-		rc.CircleCIToken = env.CircleToken
-		rc.CircleCITokenSource = "Environment variable (" + EnvCircleToken + ")"
-	case env.CircleCIToken != "":
-		rc.CircleCIToken = env.CircleCIToken
-		rc.CircleCITokenSource = "Environment variable (" + EnvCircleCIToken + ")"
-	default:
-		if val, _ := keyring.Get(keyring.CircleCITokenKey(env.CircleCIBaseURL)); val != "" {
-			rc.CircleCIToken = val
-			rc.CircleCITokenSource = SourceKeychain
-		} else if cfg.CircleCIToken != "" {
-			rc.CircleCIToken = cfg.CircleCIToken
-			rc.CircleCITokenSource = SourceConfigFile
-		}
-	}
-
-	switch {
-	case flagAPIKey != "":
-		rc.AnthropicAPIKey = flagAPIKey
-		rc.AnthropicAPIKeySource = "Flag"
-	case env.AnthropicAPIKey != "":
-		rc.AnthropicAPIKey = env.AnthropicAPIKey
-		rc.AnthropicAPIKeySource = "Environment variable"
-	default:
-		if val, _ := keyring.Get(keyring.AnthropicKeyKey(env.AnthropicBaseURL)); val != "" {
-			rc.AnthropicAPIKey = val
-			rc.AnthropicAPIKeySource = SourceKeychain
-		} else if cfg.AnthropicAPIKey != "" {
-			rc.AnthropicAPIKey = cfg.AnthropicAPIKey
-			rc.AnthropicAPIKeySource = SourceConfigFile
-		}
-	}
-
-	switch {
-	case env.GitHubToken != "":
-		rc.GitHubToken = env.GitHubToken
-		rc.GitHubTokenSource = "Environment variable (" + EnvGitHubToken + ")"
-	default:
-		if val, _ := keyring.Get(keyring.GitHubTokenKey(env.GitHubAPIURL)); val != "" {
-			rc.GitHubToken = val
-			rc.GitHubTokenSource = SourceKeychain
-		} else if cfg.GitHubToken != "" {
-			rc.GitHubToken = cfg.GitHubToken
-			rc.GitHubTokenSource = SourceConfigFile
-		}
-	}
+	// For each credential: if the env var is explicitly present in the process
+	// environment, it takes priority. A non-empty value is used directly; an
+	// empty value suppresses the keychain check so tests that clear env vars
+	// still fall through to the config file without touching the keychain.
+	resolveCircleCIToken(&rc, cfg, env)
+	resolveAnthropicKey(&rc, cfg, env, flagAPIKey)
+	resolveGitHubToken(&rc, cfg, env)
 
 	switch {
 	case flagModel != "":
@@ -266,7 +288,7 @@ func Resolve(flagAPIKey, flagModel string) (ResolvedConfig, error) {
 		rc.ModelSource = "Default"
 	}
 
-	rc.CircleCIBaseURL = env.CircleCIBaseURL
+	rc.CircleCIBaseURL = env.CircleHost
 	rc.AnthropicBaseURL = env.AnthropicBaseURL
 	rc.GitHubAPIURL = env.GitHubAPIURL
 
