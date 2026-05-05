@@ -9,31 +9,19 @@ import (
 	"testing"
 )
 
-// writeFakeGh creates a fake "gh" script in a temp directory that
-// records its arguments and returns the given exit code.
-// It returns the directory containing the fake.
-func writeFakeGh(t *testing.T, authExit, upgradeExit int) string {
+func writeFakeBrew(t *testing.T, upgradeExit int) string {
 	t.Helper()
 	dir := t.TempDir()
 
 	if runtime.GOOS == "windows" {
-		t.Skip("fake gh script not supported on Windows")
+		t.Skip("fake brew script not supported on Windows")
 	}
 
-	// The fake gh script inspects its arguments to decide behavior.
-	// "auth status" → authExit
-	// "extension upgrade ..." → upgradeExit
 	script := fmt.Sprintf(`#!/bin/sh
-if [ "$1" = "auth" ] && [ "$2" = "status" ]; then
-  exit %d
-fi
-if [ "$1" = "extension" ] && [ "$2" = "upgrade" ]; then
-  exit %d
-fi
-exit 0
-`, authExit, upgradeExit)
-	ghPath := filepath.Join(dir, "gh")
-	if err := os.WriteFile(ghPath, []byte(script), 0o755); err != nil {
+exit %d
+`, upgradeExit)
+	brewPath := filepath.Join(dir, "brew")
+	if err := os.WriteFile(brewPath, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return dir
@@ -42,23 +30,16 @@ exit 0
 func TestRun(t *testing.T) {
 	tests := []struct {
 		name        string
-		path        string // override PATH; empty means use writeFakeGh
-		authExit    int
+		path        string
 		upgradeExit int
 		wantErr     bool
 		errContains string
 	}{
 		{
-			name:        "gh not found",
+			name:        "brew not found",
 			path:        "/nonexistent",
 			wantErr:     true,
-			errContains: "gh CLI not found",
-		},
-		{
-			name:        "not authenticated",
-			authExit:    1,
-			wantErr:     true,
-			errContains: "not authenticated",
+			errContains: "brew not found",
 		},
 		{
 			name: "success",
@@ -76,7 +57,7 @@ func TestRun(t *testing.T) {
 			if tt.path != "" {
 				t.Setenv("PATH", tt.path)
 			} else {
-				dir := writeFakeGh(t, tt.authExit, tt.upgradeExit)
+				dir := writeFakeBrew(t, tt.upgradeExit)
 				t.Setenv("PATH", dir)
 			}
 
