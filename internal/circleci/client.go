@@ -79,6 +79,16 @@ func (c *Client) CreateSidecar(ctx context.Context, orgID, name, image string) (
 	return &resp, nil
 }
 
+func (c *Client) DeleteSidecar(ctx context.Context, sidecarID string) error {
+	_, err := c.cl.Call(ctx, hc.NewRequest(http.MethodDelete, "/api/v2/sidecar/instances/%s",
+		hc.RouteParams(sidecarID),
+	))
+	if err != nil {
+		return mapErr("delete sidecar", err)
+	}
+	return nil
+}
+
 func (c *Client) AddSSHKey(ctx context.Context, sidecarID, publicKey string) (*AddSSHKeyResponse, error) {
 	var resp AddSSHKeyResponse
 	_, err := c.cl.Call(ctx, hc.NewRequest(http.MethodPost, "/api/v2/sidecar/instances/%s/ssh/add-key",
