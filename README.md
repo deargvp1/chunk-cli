@@ -87,6 +87,8 @@ chunk sidecar snapshot create --name checkpoint
 chunk sidecar create --name new-sidecar --image <snapshot-id>
 ```
 
+`snapshot create` deletes the source sidecar once the snapshot is captured to avoid leaking the build instance — launch a new sidecar from the snapshot to resume work.
+
 ### Context Generation
 
 Generate a review context prompt from your org's GitHub PR comments:
