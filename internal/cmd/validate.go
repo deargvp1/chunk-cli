@@ -150,18 +150,7 @@ func newValidateCmd() *cobra.Command {
 				}
 				statusFn(iostream.LevelInfo, fmt.Sprintf("running all commands on sidecar %s", sidecarID))
 			} else if cfg.HasRemoteCommands() {
-				// Per-command remote: use active sidecar if available.
-				if active, err := sidecar.LoadActive(); err == nil && active != nil {
-					sidecarID = active.SidecarID
-					statusFn(iostream.LevelInfo, fmt.Sprintf("using sidecar %s for remote commands", sidecarID))
-				} else if hook != nil {
-					// In Stop hook context: auto-create a sandbox if possible.
-					if err := resolveOrCreateSidecarID(cmd.Context(), &sidecarID, orgID, image, workDir, streams); err != nil {
-						streams.ErrPrintf("warning: no sandbox available (%v); run 'chunk config set orgID <id>' to enable remote validation, running locally instead\n", err)
-					}
-				} else {
-					statusFn(iostream.LevelWarn, "no active sidecar found — remote commands will run locally")
-				}
+				resolvePerCommandSidecarID(cmd.Context(), &sidecarID, orgID, image, workDir, hook, streams, statusFn)
 			}
 
 			execErr := runValidate(cmd.Context(), workDir, name, inlineCmd, save, sidecarID, identityFile, workdir, allRemote, cfg, statusFn, streams)
@@ -374,6 +363,27 @@ func resolveImage(name string, cfg *config.ProjectConfig) string {
 		return cfg.Validation.SidecarImage
 	}
 	return ""
+}
+
+// resolvePerCommandSidecarID fills sidecarID for per-command remote routing
+// (i.e. when --remote is not set but some commands have Remote:true).
+// It uses the active sidecar when available, auto-creates one when a sidecar
+// image is configured or the caller is a Stop hook, and warns otherwise.
+func resolvePerCommandSidecarID(ctx context.Context, sidecarID *string, orgID, image, workDir string, hook *hookContext, streams iostream.Streams, statusFn iostream.StatusFunc) {
+	if active, err := sidecar.LoadActive(); err == nil && active != nil {
+		*sidecarID = active.SidecarID
+		statusFn(iostream.LevelInfo, fmt.Sprintf("using sidecar %s for remote commands", *sidecarID))
+		return
+	}
+	if hook != nil || image != "" {
+		// In Stop hook context, or when a sidecar image is configured: auto-create
+		// from the stored snapshot so remote commands get the prepared environment.
+		if err := resolveOrCreateSidecarID(ctx, sidecarID, orgID, image, workDir, streams); err != nil {
+			streams.ErrPrintf("warning: no sandbox available (%v); run 'chunk config set orgID <id>' to enable remote validation, running locally instead\n", err)
+		}
+		return
+	}
+	statusFn(iostream.LevelWarn, "no active sidecar found — remote commands will run locally")
 }
 
 // resolveOrCreateSidecarID fills sidecarID from the active sidecar, or creates
