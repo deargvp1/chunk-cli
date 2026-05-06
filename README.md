@@ -87,6 +87,8 @@ chunk sidecar snapshot create --name checkpoint
 chunk sidecar create --name new-sidecar --image <snapshot-id>
 ```
 
+**Note:** `snapshot create` consumes the source sidecar — it is deleted once the snapshot is captured and cannot be reused. To resume work, launch a new sidecar from the snapshot with `chunk sidecar create --image <snapshot-id>`.
+
 ### Context Generation
 
 Generate a review context prompt from your org's GitHub PR comments:

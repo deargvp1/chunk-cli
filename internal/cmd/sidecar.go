@@ -637,7 +637,13 @@ func newSidecarSnapshotCreateCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "create",
-		Short: "Create a snapshot of a sidecar",
+		Short: "Create a snapshot of a sidecar and delete the source sidecar",
+		Long: `Create a snapshot of a sidecar and delete the source sidecar.
+
+Once the snapshot is captured, the source sidecar is deleted to avoid
+leaking the build instance. If the deleted sidecar was the active one,
+the local active-sidecar state is cleared. Launch a new sidecar from the
+snapshot with 'chunk sidecar create --image <snapshot-id>'.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			io := iostream.FromCmd(cmd)
 			if len(name) > 255 {
@@ -655,6 +661,19 @@ func newSidecarSnapshotCreateCmd() *cobra.Command {
 				return err
 			}
 			io.ErrPrintf("%s\n", ui.Success(fmt.Sprintf("Created snapshot %s", snap.ID)))
+
+			if err := client.DeleteSidecar(cmd.Context(), sidecarID); err != nil {
+				io.ErrPrintf("Warning: could not delete sidecar %s: %v\n", sidecarID, err)
+				io.ErrPrintf("Delete the sidecar manually, or wait for it to expire.\n")
+				return nil
+			}
+			io.ErrPrintf("%s\n", ui.Success(fmt.Sprintf("Deleted sidecar %s", sidecarID)))
+
+			if active, lerr := sidecar.LoadActive(); lerr == nil && active != nil && active.SidecarID == sidecarID {
+				if cerr := sidecar.ClearActive(); cerr != nil {
+					io.ErrPrintf("Warning: could not clear active sidecar state: %v\n", cerr)
+				}
+			}
 			return nil
 		},
 	}
