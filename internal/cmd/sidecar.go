@@ -655,16 +655,16 @@ snapshot with 'chunk sidecar create --image <snapshot-id>'.`,
 			}
 			io.ErrPrintf("%s\n", ui.Success(fmt.Sprintf("Created snapshot %s", snap.ID)))
 
-			if err := sidecar.Delete(cmd.Context(), client, sidecarID); err != nil {
+			if err := client.DeleteSidecar(cmd.Context(), sidecarID); err != nil {
 				io.ErrPrintf("Warning: could not delete sidecar %s: %v\n", sidecarID, err)
-				io.ErrPrintf("Delete it manually in CircleCI to avoid leaking the build instance.\n")
+				io.ErrPrintf("Delete the sidecar manually, or wait for it to expire.\n")
 				return nil
 			}
 			io.ErrPrintf("%s\n", ui.Success(fmt.Sprintf("Deleted sidecar %s", sidecarID)))
 
 			if active, lerr := sidecar.LoadActive(); lerr == nil && active != nil && active.SidecarID == sidecarID {
 				if cerr := sidecar.ClearActive(); cerr != nil {
-					io.ErrPrintf("warning: could not clear active sidecar state: %v\n", cerr)
+					io.ErrPrintf("Warning: could not clear active sidecar state: %v\n", cerr)
 				}
 			}
 			return nil

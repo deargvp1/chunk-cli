@@ -18,10 +18,6 @@ func Create(ctx context.Context, client *circleci.Client, orgID, name, image str
 	return client.CreateSidecar(ctx, orgID, name, image)
 }
 
-func Delete(ctx context.Context, client *circleci.Client, sidecarID string) error {
-	return client.DeleteSidecar(ctx, sidecarID)
-}
-
 func Exec(ctx context.Context, client *circleci.Client, sidecarID, command string, args []string) (*circleci.ExecResponse, error) {
 	return client.Exec(ctx, sidecarID, command, args)
 }

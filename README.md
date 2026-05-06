@@ -87,7 +87,7 @@ chunk sidecar snapshot create --name checkpoint
 chunk sidecar create --name new-sidecar --image <snapshot-id>
 ```
 
-`snapshot create` deletes the source sidecar once the snapshot is captured to avoid leaking the build instance — launch a new sidecar from the snapshot to resume work.
+**Note:** `snapshot create` consumes the source sidecar — it is deleted once the snapshot is captured and cannot be reused. To resume work, launch a new sidecar from the snapshot with `chunk sidecar create --image <snapshot-id>`.
 
 ### Context Generation
 
