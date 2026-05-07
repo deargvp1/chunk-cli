@@ -1,12 +1,14 @@
 package sidecar
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 
 	"github.com/CircleCI-Public/chunk-cli/internal/config"
+	"github.com/CircleCI-Public/chunk-cli/internal/session"
 )
 
 // ActiveSidecar holds the currently active sidecar for a project.
@@ -16,12 +18,12 @@ type ActiveSidecar struct {
 	Workspace string `json:"workspace,omitempty"`
 }
 
-// sidecarFileName returns the name of the sidecar state file. When
-// CLAUDE_SESSION_ID is set the file is keyed to that session so concurrent
-// Claude sessions in the same repo each maintain their own active sidecar.
-func sidecarFileName() string {
-	if id := os.Getenv(config.EnvClaudeSession); id != "" {
-		return "sidecar." + id + ".json"
+// sidecarFileName returns the name of the sidecar state file. When sessionID
+// is non-empty the file is keyed to that session so concurrent Claude sessions
+// in the same repo each maintain their own active sidecar.
+func sidecarFileName(sessionID string) string {
+	if sessionID != "" {
+		return "sidecar." + sessionID + ".json"
 	}
 	return "sidecar.json"
 }
@@ -37,17 +39,17 @@ func StateDir() (string, error) {
 
 // LoadActive reads the active sidecar for the current project from XDG_DATA_HOME.
 // Returns nil if not found.
-func LoadActive() (*ActiveSidecar, error) {
+func LoadActive(ctx context.Context) (*ActiveSidecar, error) {
 	dir, err := saveDir()
 	if err != nil {
 		return nil, err
 	}
-	return LoadActiveFrom(dir)
+	return LoadActiveFrom(ctx, dir)
 }
 
 // LoadActiveFrom reads the active sidecar from dir.
-func LoadActiveFrom(dir string) (*ActiveSidecar, error) {
-	path, err := findSidecarFile(dir)
+func LoadActiveFrom(ctx context.Context, dir string) (*ActiveSidecar, error) {
+	path, err := findSidecarFile(dir, session.IDFromCtx(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -66,16 +68,16 @@ func LoadActiveFrom(dir string) (*ActiveSidecar, error) {
 }
 
 // SaveActive writes the active sidecar to XDG_DATA_HOME for the current project.
-func SaveActive(a ActiveSidecar) error {
+func SaveActive(ctx context.Context, a ActiveSidecar) error {
 	dir, err := saveDir()
 	if err != nil {
 		return err
 	}
-	return SaveActiveTo(dir, a)
+	return SaveActiveTo(ctx, dir, a)
 }
 
 // SaveActiveTo writes the active sidecar to dir.
-func SaveActiveTo(dir string, a ActiveSidecar) error {
+func SaveActiveTo(ctx context.Context, dir string, a ActiveSidecar) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -83,7 +85,7 @@ func SaveActiveTo(dir string, a ActiveSidecar) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, sidecarFileName()), data, 0o644)
+	return os.WriteFile(filepath.Join(dir, sidecarFileName(session.IDFromCtx(ctx))), data, 0o644)
 }
 
 // saveDir returns the XDG_DATA_HOME directory for the current project.
@@ -123,17 +125,17 @@ func findGitRoot() (string, error) {
 }
 
 // ClearActive removes the active sidecar state file.
-func ClearActive() error {
+func ClearActive(ctx context.Context) error {
 	dir, err := saveDir()
 	if err != nil {
 		return err
 	}
-	return ClearActiveFrom(dir)
+	return ClearActiveFrom(ctx, dir)
 }
 
 // ClearActiveFrom removes the active sidecar state file in dir.
-func ClearActiveFrom(dir string) error {
-	path, err := findSidecarFile(dir)
+func ClearActiveFrom(ctx context.Context, dir string) error {
+	path, err := findSidecarFile(dir, session.IDFromCtx(ctx))
 	if err != nil {
 		return err
 	}
@@ -144,8 +146,8 @@ func ClearActiveFrom(dir string) error {
 }
 
 // findSidecarFile returns the sidecar state file path in dir, or "" if it doesn't exist.
-func findSidecarFile(dir string) (string, error) {
-	return statOrEmpty(filepath.Join(dir, sidecarFileName()))
+func findSidecarFile(dir, sessionID string) (string, error) {
+	return statOrEmpty(filepath.Join(dir, sidecarFileName(sessionID)))
 }
 
 // statOrEmpty returns path if it exists, "" if it does not, or an error for other failures.

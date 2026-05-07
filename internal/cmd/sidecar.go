@@ -52,11 +52,11 @@ func newSidecarCmd() *cobra.Command {
 }
 
 // resolveSidecarID fills in sidecarID from the active sidecar file if it is empty.
-func resolveSidecarID(sidecarID *string) error {
+func resolveSidecarID(ctx context.Context, sidecarID *string) error {
 	if *sidecarID != "" {
 		return nil
 	}
-	active, err := sidecar.LoadActive()
+	active, err := sidecar.LoadActive(ctx)
 	if err != nil {
 		return &userError{msg: "Could not load the active sidecar.", suggestion: configFilePermHint, err: err}
 	}
@@ -190,7 +190,7 @@ func newSidecarCreateCmd() *cobra.Command {
 				}
 			}
 			io.ErrPrintf("%s\n", ui.Success(fmt.Sprintf("Created sidecar %s (%s)", sb.Name, sb.ID)))
-			if err := sidecar.SaveActive(sidecar.ActiveSidecar{SidecarID: sb.ID, Name: sb.Name}); err != nil {
+			if err := sidecar.SaveActive(cmd.Context(), sidecar.ActiveSidecar{SidecarID: sb.ID, Name: sb.Name}); err != nil {
 				io.ErrPrintf("warning: could not save active sidecar: %v\n", err)
 			} else {
 				io.ErrPrintf("Set %s as active sidecar\n", sb.ID)
@@ -216,7 +216,7 @@ func newSidecarExecCmd() *cobra.Command {
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			io := iostream.FromCmd(cmd)
-			if err := resolveSidecarID(&sidecarID); err != nil {
+			if err := resolveSidecarID(cmd.Context(), &sidecarID); err != nil {
 				return err
 			}
 			client, err := ensureCircleCIClient(cmd.Context(), io, tui.PromptHidden)
@@ -260,7 +260,7 @@ func newSidecarAddSSHKeyCmd() *cobra.Command {
 		Short: "Add an SSH public key to a sidecar",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			io := iostream.FromCmd(cmd)
-			if err := resolveSidecarID(&sidecarID); err != nil {
+			if err := resolveSidecarID(cmd.Context(), &sidecarID); err != nil {
 				return err
 			}
 			client, err := ensureCircleCIClient(cmd.Context(), io, tui.PromptHidden)
@@ -315,7 +315,7 @@ func newSidecarSSHCmd() *cobra.Command {
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			io := iostream.FromCmd(cmd)
-			if err := resolveSidecarID(&sidecarID); err != nil {
+			if err := resolveSidecarID(cmd.Context(), &sidecarID); err != nil {
 				return err
 			}
 			authSock := os.Getenv(config.EnvSSHAuthSock)
@@ -381,7 +381,7 @@ func newSidecarSyncCmd() *cobra.Command {
 		Short: "Sync files to a sidecar",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			io := iostream.FromCmd(cmd)
-			if err := resolveSidecarID(&sidecarID); err != nil {
+			if err := resolveSidecarID(cmd.Context(), &sidecarID); err != nil {
 				return err
 			}
 			authSock := os.Getenv(config.EnvSSHAuthSock)
@@ -427,7 +427,7 @@ func newSidecarUseCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			io := iostream.FromCmd(cmd)
-			if err := sidecar.SaveActive(sidecar.ActiveSidecar{SidecarID: args[0]}); err != nil {
+			if err := sidecar.SaveActive(cmd.Context(), sidecar.ActiveSidecar{SidecarID: args[0]}); err != nil {
 				return &userError{msg: "Could not save the active sidecar.", suggestion: configFilePermHint, err: err}
 			}
 			io.ErrPrintf("Set %s as active sidecar\n", args[0])
@@ -442,7 +442,7 @@ func newSidecarCurrentCmd() *cobra.Command {
 		Short: "Show the active sidecar",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			io := iostream.FromCmd(cmd)
-			active, err := sidecar.LoadActive()
+			active, err := sidecar.LoadActive(cmd.Context())
 			if err != nil {
 				return &userError{msg: "Could not load the active sidecar.", suggestion: configFilePermHint, err: err}
 			}
@@ -466,7 +466,7 @@ func newSidecarForgetCmd() *cobra.Command {
 		Short: "Clear the active sidecar",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			io := iostream.FromCmd(cmd)
-			if err := sidecar.ClearActive(); err != nil {
+			if err := sidecar.ClearActive(cmd.Context()); err != nil {
 				return &userError{msg: "Could not clear the active sidecar.", suggestion: configFilePermHint, err: err}
 			}
 			io.ErrPrintln("Active sidecar cleared")
@@ -649,7 +649,7 @@ snapshot with 'chunk sidecar create --image <snapshot-id>'.`,
 			if len(name) > 255 {
 				return fmt.Errorf("snapshot name must be 255 characters or fewer (got %d)", len(name))
 			}
-			if err := resolveSidecarID(&sidecarID); err != nil {
+			if err := resolveSidecarID(cmd.Context(), &sidecarID); err != nil {
 				return err
 			}
 			client, err := ensureCircleCIClient(cmd.Context(), io, tui.PromptHidden)
@@ -669,8 +669,8 @@ snapshot with 'chunk sidecar create --image <snapshot-id>'.`,
 			}
 			io.ErrPrintf("%s\n", ui.Success(fmt.Sprintf("Deleted sidecar %s", sidecarID)))
 
-			if active, lerr := sidecar.LoadActive(); lerr == nil && active != nil && active.SidecarID == sidecarID {
-				if cerr := sidecar.ClearActive(); cerr != nil {
+			if active, lerr := sidecar.LoadActive(cmd.Context()); lerr == nil && active != nil && active.SidecarID == sidecarID {
+				if cerr := sidecar.ClearActive(cmd.Context()); cerr != nil {
 					io.ErrPrintf("Warning: could not clear active sidecar state: %v\n", cerr)
 				}
 			}
@@ -822,7 +822,7 @@ func sidecarSetupResolveSidecar(
 	status iostream.StatusFunc,
 	streams iostream.Streams,
 ) (id, displayName, workspace string, err error) {
-	active, err := sidecar.LoadActive()
+	active, err := sidecar.LoadActive(ctx)
 	if err != nil {
 		return "", "", "", &userError{msg: "Could not load the active sidecar.", suggestion: configFilePermHint, err: err}
 	}
@@ -849,7 +849,7 @@ func sidecarSetupResolveSidecar(
 			err:        err,
 		}
 	}
-	if saveErr := sidecar.SaveActive(sidecar.ActiveSidecar{SidecarID: sc.ID, Name: sc.Name}); saveErr != nil {
+	if saveErr := sidecar.SaveActive(ctx, sidecar.ActiveSidecar{SidecarID: sc.ID, Name: sc.Name}); saveErr != nil {
 		streams.ErrPrintf("warning: could not save active sidecar: %v\n", saveErr)
 	}
 	status(iostream.LevelDone, fmt.Sprintf("Created sidecar %s (%s)", sc.Name, sc.ID))
@@ -917,7 +917,7 @@ func sidecarSetupRunSetup(
 
 	ws := workspace
 	if ws == "" {
-		if active, lerr := sidecar.LoadActive(); lerr == nil && active != nil && active.Workspace != "" {
+		if active, lerr := sidecar.LoadActive(ctx); lerr == nil && active != nil && active.Workspace != "" {
 			ws = active.Workspace
 		}
 	}
