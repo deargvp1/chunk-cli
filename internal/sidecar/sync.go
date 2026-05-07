@@ -18,11 +18,11 @@ const workspaceDir = "./workspace"
 
 // resolveWorkspace determines the workspace path. Priority:
 // 1. CLI --workdir flag  2. sidecar.json workspace  3. default.
-func resolveWorkspace(cliWorkdir, repo string) string {
+func resolveWorkspace(ctx context.Context, cliWorkdir, repo string) string {
 	if cliWorkdir != "" {
 		return cliWorkdir
 	}
-	if active, err := LoadActive(); err == nil && active != nil && active.Workspace != "" {
+	if active, err := LoadActive(ctx); err == nil && active != nil && active.Workspace != "" {
 		return active.Workspace
 	}
 	return workspaceDir + "/" + repo
@@ -30,8 +30,8 @@ func resolveWorkspace(cliWorkdir, repo string) string {
 
 // persistWorkspace saves the resolved workspace back to the sidecar file if it
 // differs from the current value.
-func persistWorkspace(workspace string) error {
-	active, err := LoadActive()
+func persistWorkspace(ctx context.Context, workspace string) error {
+	active, err := LoadActive(ctx)
 	if err != nil {
 		return err
 	}
@@ -39,7 +39,7 @@ func persistWorkspace(workspace string) error {
 		return nil
 	}
 	active.Workspace = workspace
-	return SaveActive(*active)
+	return SaveActive(ctx, *active)
 }
 
 // Sync synchronises local changes to a sidecar over SSH.
@@ -64,9 +64,9 @@ func Sync(ctx context.Context,
 		return fmt.Errorf("sync: %w", err)
 	}
 
-	repoPath := resolveWorkspace(workdir, repo)
+	repoPath := resolveWorkspace(ctx, workdir, repo)
 
-	if err := persistWorkspace(repoPath); err != nil {
+	if err := persistWorkspace(ctx, repoPath); err != nil {
 		status(iostream.LevelWarn, fmt.Sprintf("Could not save workspace: %v", err))
 	}
 

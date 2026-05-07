@@ -16,6 +16,7 @@ import (
 
 	"github.com/CircleCI-Public/chunk-cli/internal/config"
 	"github.com/CircleCI-Public/chunk-cli/internal/iostream"
+	"github.com/CircleCI-Public/chunk-cli/internal/session"
 	"github.com/CircleCI-Public/chunk-cli/internal/sidecar"
 	"github.com/CircleCI-Public/chunk-cli/internal/tui"
 	"github.com/CircleCI-Public/chunk-cli/internal/ui"
@@ -83,7 +84,9 @@ func newValidateCmd() *cobra.Command {
 			}
 
 			hook := detectHook(cmd.InOrStdin())
+			ctx := cmd.Context()
 			if hook != nil {
+				ctx = session.WithID(ctx, hook.sessionID)
 				if !hook.stopHookActive {
 					validate.ResetAttempts(hook.sessionID)
 				}
@@ -145,18 +148,18 @@ func newValidateCmd() *cobra.Command {
 
 			if remote {
 				// --remote: force all commands to sidecar, creating one if needed.
-				if err := resolveOrCreateSidecarID(cmd.Context(), &sidecarID, orgID, image, workDir, streams); err != nil {
+				if err := resolveOrCreateSidecarID(ctx, &sidecarID, orgID, image, workDir, streams); err != nil {
 					return err
 				}
 				statusFn(iostream.LevelInfo, fmt.Sprintf("running all commands on sidecar %s", sidecarID))
 			} else if cfg.HasRemoteCommands() {
 				// Per-command remote: use active sidecar if available.
-				if active, err := sidecar.LoadActive(); err == nil && active != nil {
+				if active, err := sidecar.LoadActive(ctx); err == nil && active != nil {
 					sidecarID = active.SidecarID
 					statusFn(iostream.LevelInfo, fmt.Sprintf("using sidecar %s for remote commands", sidecarID))
 				} else if hook != nil {
 					// In Stop hook context: auto-create a sandbox if possible.
-					if err := resolveOrCreateSidecarID(cmd.Context(), &sidecarID, orgID, image, workDir, streams); err != nil {
+					if err := resolveOrCreateSidecarID(ctx, &sidecarID, orgID, image, workDir, streams); err != nil {
 						streams.ErrPrintf("warning: no sandbox available (%v); run 'chunk config set orgID <id>' to enable remote validation, running locally instead\n", err)
 					}
 				} else {
@@ -164,7 +167,7 @@ func newValidateCmd() *cobra.Command {
 				}
 			}
 
-			execErr := runValidate(cmd.Context(), workDir, name, inlineCmd, save, sidecarID, identityFile, workdir, allRemote, cfg, statusFn, streams)
+			execErr := runValidate(ctx, workDir, name, inlineCmd, save, sidecarID, identityFile, workdir, allRemote, cfg, statusFn, streams)
 
 			if hook != nil {
 				maxAttempts := cfg.StopHookMaxAttempts
@@ -322,7 +325,7 @@ func openSSHSession(ctx context.Context, sidecarID, identityFile, workdir string
 	}
 	dest := workdir
 	if dest == "" {
-		if active, err := sidecar.LoadActive(); err == nil && active != nil && active.Workspace != "" {
+		if active, err := sidecar.LoadActive(ctx); err == nil && active != nil && active.Workspace != "" {
 			dest = active.Workspace
 		} else {
 			dest = "./workspace"
@@ -382,7 +385,7 @@ func resolveOrCreateSidecarID(ctx context.Context, sidecarID *string, orgID, ima
 	if *sidecarID != "" {
 		return nil
 	}
-	active, err := sidecar.LoadActive()
+	active, err := sidecar.LoadActive(ctx)
 	if err != nil {
 		return &userError{msg: "Could not load the active sidecar.", suggestion: configFilePermHint, err: err}
 	}
@@ -417,7 +420,7 @@ func resolveOrCreateSidecarID(ctx context.Context, sidecarID *string, orgID, ima
 			err:        err,
 		}
 	}
-	if saveErr := sidecar.SaveActive(sidecar.ActiveSidecar{SidecarID: sc.ID, Name: sc.Name}); saveErr != nil {
+	if saveErr := sidecar.SaveActive(ctx, sidecar.ActiveSidecar{SidecarID: sc.ID, Name: sc.Name}); saveErr != nil {
 		streams.ErrPrintf("warning: could not save active sidecar: %v\n", saveErr)
 	}
 	// Persist the org ID so future sandbox creation skips the picker.

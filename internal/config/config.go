@@ -49,7 +49,6 @@ const (
 	EnvXDGConfigHome = "XDG_CONFIG_HOME"
 	EnvXDGStateHome  = "XDG_STATE_HOME"
 	EnvXDGDataHome   = "XDG_DATA_HOME"
-	EnvClaudeSession = "CLAUDE_SESSION_ID"
 )
 
 // EnvVars holds all environment variables the application reads.
@@ -72,7 +71,6 @@ type EnvVars struct {
 	XDGConfigHome    string `env:"XDG_CONFIG_HOME"`
 	XDGStateHome     string `env:"XDG_STATE_HOME"`
 	XDGDataHome      string `env:"XDG_DATA_HOME"`
-	ClaudeSession    string `env:"CLAUDE_SESSION_ID"`
 }
 
 // LoadEnv populates an EnvVars struct from the process environment.
