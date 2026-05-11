@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"regexp"
 
-	petname "github.com/dustinkirkland/golang-petname"
 	"github.com/spf13/cobra"
 
 	"github.com/CircleCI-Public/chunk-cli/envbuilder"
@@ -23,10 +22,6 @@ import (
 	"github.com/CircleCI-Public/chunk-cli/internal/tui"
 	"github.com/CircleCI-Public/chunk-cli/internal/ui"
 )
-
-func randomSidecarName() string {
-	return petname.Generate(3, "-")
-}
 
 func newSidecarCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -171,9 +166,6 @@ func newSidecarCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if name == "" {
-				name = randomSidecarName()
-			}
 			resolvedOrgID, err := resolveOrgID(orgID, orgPicker(cmd.Context(), client))
 			if err != nil {
 				return err
@@ -200,8 +192,9 @@ func newSidecarCreateCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&orgID, "org-id", "", "Organization ID")
-	cmd.Flags().StringVar(&name, "name", "", "Sidecar name (auto-generated if not provided)")
+	cmd.Flags().StringVar(&name, "name", "", "Sidecar name")
 	cmd.Flags().StringVar(&image, "image", "", "E2B template ID or container image")
+	_ = cmd.MarkFlagRequired("name")
 
 	return cmd
 }
@@ -389,7 +382,7 @@ func newSidecarSyncCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			err = sidecar.Sync(cmd.Context(), client, sidecarID, identityFile, authSock, workdir, newStatusFunc(io))
+			_, err = sidecar.Sync(cmd.Context(), client, sidecarID, identityFile, authSock, workdir, newStatusFunc(io))
 			if err != nil {
 				if _, ok := errors.AsType[*sidecar.RemoteBaseError](err); ok {
 					return &userError{
@@ -637,13 +630,7 @@ func newSidecarSnapshotCreateCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "create",
-		Short: "Create a snapshot of a sidecar and delete the source sidecar",
-		Long: `Create a snapshot of a sidecar and delete the source sidecar.
-
-Once the snapshot is captured, the source sidecar is deleted to avoid
-leaking the build instance. If the deleted sidecar was the active one,
-the local active-sidecar state is cleared. Launch a new sidecar from the
-snapshot with 'chunk sidecar create --image <snapshot-id>'.`,
+		Short: "Create a snapshot of a sidecar",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			io := iostream.FromCmd(cmd)
 			if len(name) > 255 {
@@ -661,19 +648,6 @@ snapshot with 'chunk sidecar create --image <snapshot-id>'.`,
 				return err
 			}
 			io.ErrPrintf("%s\n", ui.Success(fmt.Sprintf("Created snapshot %s", snap.ID)))
-
-			if err := client.DeleteSidecar(cmd.Context(), sidecarID); err != nil {
-				io.ErrPrintf("Warning: could not delete sidecar %s: %v\n", sidecarID, err)
-				io.ErrPrintf("Delete the sidecar manually, or wait for it to expire.\n")
-				return nil
-			}
-			io.ErrPrintf("%s\n", ui.Success(fmt.Sprintf("Deleted sidecar %s", sidecarID)))
-
-			if active, lerr := sidecar.LoadActive(); lerr == nil && active != nil && active.SidecarID == sidecarID {
-				if cerr := sidecar.ClearActive(); cerr != nil {
-					io.ErrPrintf("Warning: could not clear active sidecar state: %v\n", cerr)
-				}
-			}
 			return nil
 		},
 	}
@@ -713,7 +687,7 @@ func newSidecarSnapshotGetCmd() *cobra.Command {
 }
 
 func newSidecarSetupCmd() *cobra.Command {
-	var sidecarID, orgID, name, identityFile, dir string
+	var sidecarID, orgID, name, identityFile, dir, workdir string
 	var skipSync, force bool
 
 	cmd := &cobra.Command{
@@ -785,10 +759,17 @@ Example:
 				return err
 			}
 
-			// Step 4: Sync files to sidecar.
+			// Step 4: Sync files to sidecar and persist the resolved workspace.
 			if !skipSync {
-				if err := sidecarSetupSync(cmd.Context(), client, sidecarID, identityFile, authSock, status); err != nil {
+				resolvedWorkspace, err := sidecarSetupSync(cmd.Context(), client, sidecarID, identityFile, authSock, workdir, status)
+				if err != nil {
 					return err
+				}
+				workspace = resolvedWorkspace
+			} else if workspace == "" {
+				// skipSync: read from active sidecar state.
+				if active, err := sidecar.LoadActive(); err == nil && active != nil {
+					workspace = active.Workspace
 				}
 			}
 
@@ -809,6 +790,7 @@ Example:
 	cmd.Flags().StringVar(&orgID, "org-id", "", "Organization ID (used when creating a new sidecar)")
 	cmd.Flags().StringVar(&name, "name", "", "Sidecar name (used when creating a new sidecar)")
 	cmd.Flags().StringVar(&identityFile, "identity-file", "", "SSH identity file")
+	cmd.Flags().StringVar(&workdir, "workdir", "", "Working directory on sidecar (auto-detected as /workspace/<repo> when omitted)")
 	cmd.Flags().BoolVar(&skipSync, "skip-sync", false, "Skip syncing files to the sidecar")
 	cmd.Flags().BoolVar(&force, "force", false, "Re-detect environment even if cached in .chunk/config.json")
 
@@ -831,7 +813,11 @@ func sidecarSetupResolveSidecar(
 		return active.SidecarID, active.Name, active.Workspace, nil
 	}
 	if name == "" {
-		name = randomSidecarName()
+		return "", "", "", &userError{
+			msg:        "No active sidecar and --name not provided.",
+			suggestion: "Pass --name to create a new sidecar, or run 'chunk sidecar use <id>'.",
+			errMsg:     "no active sidecar and --name not provided",
+		}
 	}
 	resolvedOrgID, err := resolveOrgID(orgID, orgPicker(ctx, client))
 	if err != nil {
@@ -877,28 +863,28 @@ func sidecarSetupEnsureSSHKey(identityFile string, status iostream.StatusFunc) e
 func sidecarSetupSync(
 	ctx context.Context,
 	client *circleci.Client,
-	sidecarID, identityFile, authSock string,
+	sidecarID, identityFile, authSock, workdir string,
 	status iostream.StatusFunc,
-) error {
+) (string, error) {
 	status(iostream.LevelStep, "Syncing files to sidecar...")
-	err := sidecar.Sync(ctx, client, sidecarID, identityFile, authSock, "", status)
+	resolvedWorkspace, err := sidecar.Sync(ctx, client, sidecarID, identityFile, authSock, workdir, status)
 	if err == nil {
-		return nil
+		return resolvedWorkspace, nil
 	}
 	if _, ok := errors.AsType[*sidecar.RemoteBaseError](err); ok {
-		return &userError{
+		return "", &userError{
 			msg:        "Could not resolve remote base.",
 			suggestion: "Push your branch to the remote before syncing.",
 			err:        err,
 		}
 	}
 	if authErr := sshSessionError(err); authErr != nil {
-		return authErr
+		return "", authErr
 	}
 	if authErr := notAuthorized("sync files", err); authErr != nil {
-		return authErr
+		return "", authErr
 	}
-	return err
+	return "", err
 }
 
 func sidecarSetupRunSetup(

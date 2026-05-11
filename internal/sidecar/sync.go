@@ -46,22 +46,23 @@ func persistWorkspace(workspace string) error {
 // It ensures the workspace base exists, clones the repo into workdir if absent,
 // then resets to the remote base and applies a patch of local changes.
 // workdir overrides the destination path; defaults to /workspace/<repo>.
+// It returns the resolved remote workspace path.
 func Sync(ctx context.Context,
-	client *circleci.Client, sidecarID, identityFile, authSock, workdir string, status iostream.StatusFunc) error {
+	client *circleci.Client, sidecarID, identityFile, authSock, workdir string, status iostream.StatusFunc) (string, error) {
 
 	session, err := OpenSession(ctx, client, sidecarID, identityFile, authSock)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("sync: %w", err)
+		return "", fmt.Errorf("sync: %w", err)
 	}
 
 	org, repo, err := gitremote.DetectOrgAndRepo(cwd)
 	if err != nil {
-		return fmt.Errorf("sync: %w", err)
+		return "", fmt.Errorf("sync: %w", err)
 	}
 
 	repoPath := resolveWorkspace(workdir, repo)
@@ -74,11 +75,11 @@ func Sync(ctx context.Context,
 	err = syncWorkspace(ctx, status, org, repo, repoPath, session)
 	if err == nil {
 		status(iostream.LevelDone, "Synced")
-		return nil
+		return repoPath, nil
 	}
 	// We should only try again if the failure was in the apply phase.
 	if !errors.Is(err, errApplyFailed) {
-		return err
+		return "", err
 	}
 
 	// Second attempt - after deleting the remote folder
@@ -87,17 +88,17 @@ func Sync(ctx context.Context,
 
 	// Delete the remote working directory
 	if result, err := ExecOverSSH(ctx, session, "rm -rf "+ShellEscape(repoPath), nil, nil); err != nil {
-		return fmt.Errorf("sync: rm %s: %w", repoPath, err)
+		return "", fmt.Errorf("sync: rm %s: %w", repoPath, err)
 	} else if result.ExitCode != 0 {
-		return fmt.Errorf("sync: rm %s: %s", repoPath, result.Stderr)
+		return "", fmt.Errorf("sync: rm %s: %s", repoPath, result.Stderr)
 	}
 
 	if err := syncWorkspace(ctx, status, org, repo, repoPath, session); err != nil {
-		return fmt.Errorf("sync retry: %w", err)
+		return "", fmt.Errorf("sync retry: %w", err)
 	}
 
 	status(iostream.LevelDone, "Synced")
-	return nil
+	return repoPath, nil
 }
 
 var errApplyFailed = errors.New("apply failed")

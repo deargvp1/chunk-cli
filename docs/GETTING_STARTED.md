@@ -172,8 +172,7 @@ The agent loads your team's prompt, diffs the changes, and returns filtered find
 Sidecars let you run validations in a clean cloud environment. The typical loop:
 
 ```bash
-# One-time: create a sidecar (--name is optional; a random name is generated if omitted)
-chunk sidecar create
+# One-time: create a sidecar
 chunk sidecar create --name my-sidecar
 
 # Set it as active
@@ -202,7 +201,7 @@ Auto-detect your tech stack and build a sidecar image for it:
 ```bash
 chunk sidecar env                                    # detect stack, save to config
 chunk sidecar env | chunk sidecar build --tag myimg  # build Docker image
-chunk sidecar create --image myimg                   # name auto-generated
+chunk sidecar create --name my-sidecar --image myimg
 ```
 
 ### Snapshots
@@ -212,10 +211,8 @@ Capture a configured environment so future sidecars boot fast:
 ```bash
 chunk sidecar snapshot create --name checkpoint
 # Later:
-chunk sidecar create --image <snapshot-id>           # name auto-generated
+chunk sidecar create --name new-sidecar --image <snapshot-id>
 ```
-
-`snapshot create` deletes the source sidecar once the snapshot is captured to avoid leaking the build instance. If it was the active sidecar, local active-sidecar state is cleared too — launch a new one from the snapshot to resume work.
 
 ---
 

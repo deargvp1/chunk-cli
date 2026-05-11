@@ -100,7 +100,7 @@ chunk
 │   │   --skip-snapshot             # Skip creating a snapshot after install
 │   │   --force                     # Re-detect environment even if cached
 │   └── snapshot
-│       ├── create                  # Snapshot a sidecar, then delete the source sidecar
+│       ├── create                  # Create a snapshot of a sidecar
 │       │   --sidecar-id <id>       # Sidecar ID (defaults to active sidecar)
 │       │   --name <name>           # Snapshot name (required)
 │       └── get <snapshot-id>       # Get a snapshot by ID
