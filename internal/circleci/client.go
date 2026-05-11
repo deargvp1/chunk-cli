@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	hc "github.com/CircleCI-Public/chunk-cli/internal/httpcl"
 	"github.com/CircleCI-Public/chunk-cli/internal/version"
@@ -37,6 +38,7 @@ func NewClient(cfg Config) (*Client, error) {
 		AuthToken:  cfg.Token,
 		AuthHeader: "Circle-Token",
 		UserAgent:  version.UserAgent(),
+		Timeout:    60 * time.Second,
 	})
 	return &Client{cl: cl}, nil
 }
