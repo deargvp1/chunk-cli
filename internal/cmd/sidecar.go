@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 
 	petname "github.com/dustinkirkland/golang-petname"
@@ -18,7 +17,6 @@ import (
 	"github.com/CircleCI-Public/chunk-cli/internal/circleci"
 	"github.com/CircleCI-Public/chunk-cli/internal/config"
 	"github.com/CircleCI-Public/chunk-cli/internal/iostream"
-	"github.com/CircleCI-Public/chunk-cli/internal/secrets"
 	"github.com/CircleCI-Public/chunk-cli/internal/sidecar"
 	"github.com/CircleCI-Public/chunk-cli/internal/tui"
 	"github.com/CircleCI-Public/chunk-cli/internal/ui"
@@ -323,33 +321,14 @@ func newSidecarSSHCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			flagVars, err := sidecar.ParseEnvPairs(envVarsFlag)
+			cwd, err := os.Getwd()
 			if err != nil {
-				return &userError{msg: fmt.Sprintf("invalid --env value: %s", err), err: err}
+				return &userError{msg: "Could not determine the current directory.", err: err}
 			}
-			var envVars map[string]string
-			if envFile != "" {
-				path := envFile
-				if !filepath.IsAbs(path) {
-					cwd, err := os.Getwd()
-					if err != nil {
-						return &userError{msg: "Could not determine the current directory.", err: err}
-					}
-					path = filepath.Join(cwd, path)
-				}
-				fileVars, err := sidecar.LoadEnvFileAt(path)
-				if err != nil {
-					return &userError{msg: fmt.Sprintf("load %s: %s", envFile, err), err: err}
-				}
-				envVars = sidecar.MergeEnv(fileVars, flagVars)
-			} else {
-				envVars = flagVars
-			}
-			resolved, err := secrets.ResolveAll(cmd.Context(), envVars, nil)
+			envVars, err := resolveEnvVars(cmd.Context(), cwd, envFile, envVarsFlag)
 			if err != nil {
-				return &userError{msg: fmt.Sprintf("resolve secrets: %s", err), err: err}
+				return err
 			}
-			envVars = resolved
 			err = sidecar.SSH(cmd.Context(), client, sidecarID, identityFile, authSock, args, envVars, io)
 			if err != nil {
 				if err := sshSessionError(err); err != nil {
@@ -368,7 +347,7 @@ func newSidecarSSHCmd() *cobra.Command {
 	cmd.Flags().StringVar(&identityFile, "identity-file", "", "SSH identity file")
 	cmd.Flags().StringArrayVarP(&envVarsFlag, "env", "e", nil, "KEY=VALUE pairs to set in the remote session (repeatable)")
 	cmd.Flags().StringVar(&envFile, "env-file", "", "Env file to load (default .env.local when flag is present)")
-	cmd.Flags().Lookup("env-file").NoOptDefVal = ".env.local"
+	cmd.Flags().Lookup("env-file").NoOptDefVal = defaultEnvFile
 
 	return cmd
 }
@@ -715,6 +694,8 @@ func newSidecarSnapshotGetCmd() *cobra.Command {
 func newSidecarSetupCmd() *cobra.Command {
 	var sidecarID, orgID, name, identityFile, dir string
 	var skipSync, force bool
+	var envVarsFlag []string
+	var envFile string
 
 	cmd := &cobra.Command{
 		Use:   "setup",
@@ -792,8 +773,14 @@ Example:
 				}
 			}
 
-			// Step 5: Run setup steps over SSH.
-			if err := sidecarSetupRunSetup(cmd.Context(), client, sidecarID, identityFile, authSock, env, workspace, streams, status); err != nil {
+			// Step 5: Resolve env vars for SSH execution.
+			envVars, err := resolveEnvVars(cmd.Context(), dir, envFile, envVarsFlag)
+			if err != nil {
+				return err
+			}
+
+			// Step 6: Run setup steps over SSH.
+			if err := sidecarSetupRunSetup(cmd.Context(), client, sidecarID, identityFile, authSock, env, workspace, envVars, streams, status); err != nil {
 				return err
 			}
 
@@ -811,6 +798,9 @@ Example:
 	cmd.Flags().StringVar(&identityFile, "identity-file", "", "SSH identity file")
 	cmd.Flags().BoolVar(&skipSync, "skip-sync", false, "Skip syncing files to the sidecar")
 	cmd.Flags().BoolVar(&force, "force", false, "Re-detect environment even if cached in .chunk/config.json")
+	cmd.Flags().StringArrayVarP(&envVarsFlag, "env", "e", nil, "KEY=VALUE pairs to set in remote sidecar session (repeatable)")
+	cmd.Flags().StringVar(&envFile, "env-file", "", "Env file to load (default .env.local when flag is present)")
+	cmd.Flags().Lookup("env-file").NoOptDefVal = defaultEnvFile
 
 	return cmd
 }
@@ -907,6 +897,7 @@ func sidecarSetupRunSetup(
 	sidecarID, identityFile, authSock string,
 	env *envbuilder.Environment,
 	workspace string,
+	envVars map[string]string,
 	streams iostream.Streams,
 	status iostream.StatusFunc,
 ) error {
@@ -946,7 +937,7 @@ func sidecarSetupRunSetup(
 			workspaceCmd = "export PATH=" + paths + ":$PATH && " + workspaceCmd
 		}
 		loginCmd := "bash -l -c " + sidecar.ShellEscape(workspaceCmd)
-		result, err := sidecar.ExecOverSSH(ctx, session, loginCmd, nil, nil)
+		result, err := sidecar.ExecOverSSH(ctx, session, loginCmd, nil, envVars)
 		if err != nil {
 			if sessErr := sshSessionError(err); sessErr != nil {
 				return sessErr
