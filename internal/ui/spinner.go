@@ -6,8 +6,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	"golang.org/x/term"
 )
 
 var frames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -34,7 +32,7 @@ type Spinner struct {
 func NewSpinner() *Spinner {
 	return &Spinner{
 		w:     os.Stderr,
-		isTTY: term.IsTerminal(int(os.Stderr.Fd())),
+		isTTY: stderrColorEnabled,
 	}
 }
 
@@ -119,7 +117,7 @@ func (s *Spinner) render() {
 
 	line := fmt.Sprintf("%s %s", frame, msg)
 	if elapsed := time.Since(start); elapsed >= elapsedThreshold {
-		line += Dim(fmt.Sprintf(" (%ds)", int(elapsed.Seconds())))
+		line += ErrDim(fmt.Sprintf(" (%ds)", int(elapsed.Seconds())))
 	}
 	_, _ = fmt.Fprintf(s.w, "\r\x1b[2K%s", line)
 }
