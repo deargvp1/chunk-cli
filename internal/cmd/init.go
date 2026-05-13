@@ -209,8 +209,36 @@ func installSkillsStep(streams iostream.Streams) {
 	}
 }
 
+// writeTestSuites scaffolds .circleci/test-suites.yml for CircleCI Smarter
+// Testing whenever the toolchain has a known template, creating .circleci/
+// if it does not already exist. It never overwrites an existing
+// test-suites.yml.
+func writeTestSuites(workDir string, streams iostream.Streams) error {
+	template := validate.TestSuitesTemplate(workDir)
+	if template == "" {
+		return nil
+	}
+
+	circleDir := filepath.Join(workDir, ".circleci")
+	path := filepath.Join(circleDir, "test-suites.yml")
+	if _, err := os.Stat(path); err == nil {
+		streams.ErrPrintln(ui.Dim(".circleci/test-suites.yml already exists, leaving as-is"))
+		return nil
+	}
+
+	if err := os.MkdirAll(circleDir, 0o755); err != nil {
+		return fmt.Errorf("create .circleci dir: %w", err)
+	}
+
+	if err := os.WriteFile(path, []byte(template), 0o644); err != nil {
+		return fmt.Errorf("write test-suites.yml: %w", err)
+	}
+	streams.ErrPrintln(ui.Success("Wrote .circleci/test-suites.yml"))
+	return nil
+}
+
 func newInitCmd() *cobra.Command {
-	var force, skipHooks, skipValidate, skipCompletions, skipSkills bool
+	var force, skipHooks, skipValidate, skipCompletions, skipSkills, skipTestSuites bool
 	var projectDir string
 
 	cmd := &cobra.Command{
@@ -325,7 +353,14 @@ hook config files.`,
 				}
 			}
 
-			// Step 5: Agent skills
+			// Step 5: CircleCI Smarter Testing test-suites.yml
+			if !skipTestSuites {
+				if err := writeTestSuites(workDir, streams); err != nil {
+					streams.ErrPrintf("%s\n", ui.Warning(fmt.Sprintf("Could not write .circleci/test-suites.yml: %v", err)))
+				}
+			}
+
+			// Step 6: Agent skills
 			if !skipSkills {
 				installSkillsStep(streams)
 			}
@@ -340,6 +375,7 @@ hook config files.`,
 	cmd.Flags().BoolVar(&skipValidate, "skip-validate", false, "Skip validate command detection")
 	cmd.Flags().BoolVar(&skipCompletions, "skip-completions", false, "Skip shell completion installation")
 	cmd.Flags().BoolVar(&skipSkills, "skip-skills", false, "Skip agent skill installation")
+	cmd.Flags().BoolVar(&skipTestSuites, "skip-test-suites", false, "Skip CircleCI test-suites.yml generation")
 	cmd.Flags().StringVar(&projectDir, "project-dir", "", "Project directory (defaults to current directory)")
 
 	return cmd
