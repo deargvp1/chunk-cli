@@ -35,6 +35,10 @@ chunk validate tests        # specific command
 chunk validate --list       # list configured commands
 ```
 
+### Agent Onboarding (Preferred method)
+
+Chunk init will install skills for working with Chunk sidecars. After the init, start a claude session and run `/chunk-sidecars` and your agent will create a sidecar and configure it for use running tests.
+
 ### Sidecar Environments
 
 Create and work in cloud sidecar environments. Sidecars are available to CircleCI customers on a paid plan. Share feedback in the [CircleCI Discord](https://discord.gg/circleci).
