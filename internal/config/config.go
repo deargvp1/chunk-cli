@@ -43,15 +43,16 @@ const (
 //
 //nolint:gosec // env var names, not credentials
 const (
-	EnvCircleToken      = "CIRCLE_TOKEN"
-	EnvCircleCIToken    = "CIRCLECI_TOKEN"
-	EnvCircleCIBaseURL  = "CIRCLECI_BASE_URL"
-	EnvAnthropicAPIKey  = "ANTHROPIC_API_KEY"
-	EnvAnthropicBaseURL = "ANTHROPIC_BASE_URL"
-	EnvGitHubToken      = "GITHUB_TOKEN"
-	EnvGitHubAPIURL     = "GITHUB_API_URL"
-	EnvModel            = "CODE_REVIEW_CLI_MODEL"
-	EnvCircleCIOrgID    = "CIRCLECI_ORG_ID"
+	EnvCircleToken        = "CIRCLE_TOKEN"
+	EnvCircleCIToken      = "CIRCLECI_TOKEN"
+	EnvCircleCIBaseURL    = "CIRCLECI_BASE_URL"
+	EnvAnthropicAPIKey    = "ANTHROPIC_API_KEY"
+	EnvAnthropicBaseURL   = "ANTHROPIC_BASE_URL"
+	EnvGitHubToken        = "GITHUB_TOKEN"
+	EnvGitHubAPIURL       = "GITHUB_API_URL"
+	EnvModel              = "CODE_REVIEW_CLI_MODEL"
+	EnvCircleCIOrgID      = "CIRCLECI_ORG_ID"
+	EnvChunkHooksDisabled = "CHUNK_HOOKS_DISABLED"
 )
 
 // System/standard environment variable names.
