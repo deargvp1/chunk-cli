@@ -448,7 +448,7 @@ func resolveOrCreateSidecarID(ctx context.Context, sidecarID *string, orgID, ima
 	}
 	active, loadErr := sidecar.LoadActive(ctx)
 	if loadErr != nil {
-		return false, &userError{msg: "Could not load the active sidecar.", suggestion: configFilePermHint, err: loadErr}
+		return false, &userError{msg: msgCouldNotLoadSidecar, suggestion: configFilePermHint, err: loadErr}
 	}
 	if active != nil {
 		*sidecarID = active.SidecarID

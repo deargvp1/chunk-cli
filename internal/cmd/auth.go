@@ -21,8 +21,6 @@ const (
 	providerGitHub    = "github"
 )
 
-const configFilePermHint = "Check file permissions on the chunk config file."
-
 func newAuthCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:                "auth",
@@ -86,7 +84,7 @@ func authSetCircleCI(ctx context.Context, io iostream.Streams, baseURL string, e
 
 	cfg, err := config.Load()
 	if err != nil {
-		return &userError{msg: "Could not load configuration.", suggestion: configFilePermHint, err: err}
+		return &userError{msg: msgCouldNotLoadConfig, suggestion: configFilePermHint, err: err}
 	}
 	if cfg.CircleCIToken != "" {
 		io.Printf("A CircleCI token is already stored in config.\n")
@@ -144,7 +142,7 @@ func authSetAnthropic(ctx context.Context, io iostream.Streams, baseURL string, 
 
 	cfg, err := config.Load()
 	if err != nil {
-		return &userError{msg: "Could not load configuration.", suggestion: configFilePermHint, err: err}
+		return &userError{msg: msgCouldNotLoadConfig, suggestion: configFilePermHint, err: err}
 	}
 	if cfg.AnthropicAPIKey != "" {
 		io.Printf("An Anthropic API key is already stored in config.\n")
@@ -204,7 +202,7 @@ func authSetAnthropic(ctx context.Context, io iostream.Streams, baseURL string, 
 
 	cfg, err = config.Load()
 	if err != nil {
-		return &userError{msg: "Could not load configuration.", suggestion: configFilePermHint, err: err}
+		return &userError{msg: msgCouldNotLoadConfig, suggestion: configFilePermHint, err: err}
 	}
 	cfg.AnthropicAPIKey = key
 	if err := config.Save(cfg); err != nil {
@@ -229,7 +227,7 @@ func saveCircleCIToken(ctx context.Context, token string, streams iostream.Strea
 
 	cfg, err := config.Load()
 	if err != nil {
-		return &userError{msg: "Could not load configuration.", suggestion: configFilePermHint, err: err}
+		return &userError{msg: msgCouldNotLoadConfig, suggestion: configFilePermHint, err: err}
 	}
 	cfg.CircleCIToken = token
 	if err := config.Save(cfg); err != nil {
@@ -372,7 +370,7 @@ func newAuthRemoveCmd() *cobra.Command {
 func authRemoveCircleCI(io iostream.Streams, envSet, force bool) error {
 	cfg, err := config.Load()
 	if err != nil {
-		return &userError{msg: "Could not load configuration.", suggestion: configFilePermHint, err: err}
+		return &userError{msg: msgCouldNotLoadConfig, suggestion: configFilePermHint, err: err}
 	}
 	if cfg.CircleCIToken == "" {
 		io.Println(ui.Warning("No CircleCI token stored in config file."))
@@ -387,7 +385,7 @@ func authRemoveCircleCI(io iostream.Streams, envSet, force bool) error {
 	io.Println("")
 	cfgPath, err := config.Path()
 	if err != nil {
-		return &userError{msg: "Could not access configuration.", err: err}
+		return &userError{msg: msgCouldNotAccessConfig, err: err}
 	}
 	io.Printf("This will remove your stored CircleCI token from %s\n", cfgPath)
 	if !force {
@@ -429,7 +427,7 @@ func authRemoveCircleCI(io iostream.Streams, envSet, force bool) error {
 func authRemoveAnthropic(io iostream.Streams, envSet, force bool) error {
 	cfg, err := config.Load()
 	if err != nil {
-		return &userError{msg: "Could not load configuration.", suggestion: configFilePermHint, err: err}
+		return &userError{msg: msgCouldNotLoadConfig, suggestion: configFilePermHint, err: err}
 	}
 	if cfg.AnthropicAPIKey == "" {
 		io.Println(ui.Warning("No API key stored in config file."))
@@ -444,7 +442,7 @@ func authRemoveAnthropic(io iostream.Streams, envSet, force bool) error {
 	io.Println("")
 	cfgPath, err := config.Path()
 	if err != nil {
-		return &userError{msg: "Could not access configuration.", err: err}
+		return &userError{msg: msgCouldNotAccessConfig, err: err}
 	}
 	io.Printf("This will remove your stored API key from %s\n", cfgPath)
 	if !force {
@@ -499,7 +497,7 @@ func authSetGitHub(ctx context.Context, io iostream.Streams, baseURL string, env
 
 	cfg, err := config.Load()
 	if err != nil {
-		return &userError{msg: "Could not load configuration.", suggestion: configFilePermHint, err: err}
+		return &userError{msg: msgCouldNotLoadConfig, suggestion: configFilePermHint, err: err}
 	}
 	if cfg.GitHubToken != "" {
 		io.Printf("A GitHub token is already stored in config.\n")
@@ -550,7 +548,7 @@ func authSetGitHub(ctx context.Context, io iostream.Streams, baseURL string, env
 
 	cfg, err = config.Load()
 	if err != nil {
-		return &userError{msg: "Could not load configuration.", suggestion: configFilePermHint, err: err}
+		return &userError{msg: msgCouldNotLoadConfig, suggestion: configFilePermHint, err: err}
 	}
 	cfg.GitHubToken = token
 	if err := config.Save(cfg); err != nil {
@@ -565,7 +563,7 @@ func authSetGitHub(ctx context.Context, io iostream.Streams, baseURL string, env
 func authRemoveGitHub(io iostream.Streams, envSet, force bool) error {
 	cfg, err := config.Load()
 	if err != nil {
-		return &userError{msg: "Could not load configuration.", suggestion: configFilePermHint, err: err}
+		return &userError{msg: msgCouldNotLoadConfig, suggestion: configFilePermHint, err: err}
 	}
 	if cfg.GitHubToken == "" {
 		io.Println(ui.Warning("No GitHub token stored in config file."))
@@ -580,7 +578,7 @@ func authRemoveGitHub(io iostream.Streams, envSet, force bool) error {
 	io.Println("")
 	cfgPath, err := config.Path()
 	if err != nil {
-		return &userError{msg: "Could not access configuration.", err: err}
+		return &userError{msg: msgCouldNotAccessConfig, err: err}
 	}
 	io.Printf("This will remove your stored GitHub token from %s\n", cfgPath)
 	if !force {

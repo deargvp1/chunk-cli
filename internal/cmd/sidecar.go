@@ -60,7 +60,7 @@ func resolveSidecarID(ctx context.Context, sidecarID *string) error {
 	}
 	active, err := sidecar.LoadActive(ctx)
 	if err != nil {
-		return &userError{msg: "Could not load the active sidecar.", suggestion: configFilePermHint, err: err}
+		return &userError{msg: msgCouldNotLoadSidecar, suggestion: configFilePermHint, err: err}
 	}
 	if active == nil {
 		return &userError{
@@ -153,7 +153,7 @@ func newSidecarListCmd() *cobra.Command {
 				}
 				return &userError{
 					msg:        "Could not list sidecars.",
-					suggestion: "Check your network connection and try again.",
+					suggestion: suggestionNetworkRetry,
 					err:        err,
 				}
 			}
@@ -205,7 +205,7 @@ func newSidecarCreateCmd() *cobra.Command {
 				}
 				return &userError{
 					msg:        "Could not create the sidecar.",
-					suggestion: "Check your network connection and try again.",
+					suggestion: suggestionNetworkRetry,
 					err:        err,
 				}
 			}
@@ -466,7 +466,7 @@ func newSidecarCurrentCmd() *cobra.Command {
 			io := iostream.FromCmd(cmd)
 			active, err := sidecar.LoadActive(cmd.Context())
 			if err != nil {
-				return &userError{msg: "Could not load the active sidecar.", suggestion: configFilePermHint, err: err}
+				return &userError{msg: msgCouldNotLoadSidecar, suggestion: configFilePermHint, err: err}
 			}
 			if active == nil {
 				if jsonOut {
@@ -864,7 +864,7 @@ func sidecarSetupResolveSidecar(
 ) (id, displayName string, err error) {
 	active, err := sidecar.LoadActive(ctx)
 	if err != nil {
-		return "", "", &userError{msg: "Could not load the active sidecar.", suggestion: configFilePermHint, err: err}
+		return "", "", &userError{msg: msgCouldNotLoadSidecar, suggestion: configFilePermHint, err: err}
 	}
 	if active != nil {
 		status(iostream.LevelInfo, fmt.Sprintf("using active sidecar %s", active.SidecarID))
@@ -885,7 +885,7 @@ func sidecarSetupResolveSidecar(
 		}
 		return "", "", &userError{
 			msg:        "Could not create the sidecar.",
-			suggestion: "Check your network connection and try again.",
+			suggestion: suggestionNetworkRetry,
 			err:        err,
 		}
 	}
