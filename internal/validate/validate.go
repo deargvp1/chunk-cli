@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -228,6 +229,22 @@ type HookExitError struct {
 
 func (e *HookExitError) Error() string { return fmt.Sprintf("exit %d", e.code) }
 func (e *HookExitError) ExitCode() int { return e.code }
+
+// NewHookExitError returns a HookExitError with the given exit code.
+func NewHookExitError(code int) error { return &HookExitError{code: code} }
+
+// HooksDisabled reports whether chunk validate hooks are currently suppressed.
+// It returns true when the CHUNK_HOOKS_DISABLED env var is non-empty or the
+// sentinel file .chunk/hooks-disabled exists under workDir.
+// On any error other than ErrNotExist the function fails open (returns false)
+// so hooks continue to run when the check is uncertain.
+func HooksDisabled(workDir string) bool {
+	if os.Getenv(config.EnvChunkHooksDisabled) != "" {
+		return true
+	}
+	_, err := os.Stat(filepath.Join(workDir, ".chunk", "hooks-disabled"))
+	return err == nil
+}
 
 // HasGitChanges reports whether the working tree at workDir has any
 // uncommitted modifications (staged or unstaged). Returns true when git

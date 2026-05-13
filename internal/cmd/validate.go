@@ -112,6 +112,12 @@ func newValidateCmd() *cobra.Command {
 			}
 			statusFn := newStatusFunc(streams)
 
+			// Hook: exit 1 with a message when hooks are disabled.
+			if hook != nil && validate.HooksDisabled(workDir) {
+				streams.ErrPrintln("chunk validate: hooks are disabled — skipping validation")
+				return validate.NewHookExitError(1)
+			}
+
 			// Hook: skip entirely when the working tree is clean.
 			if hook != nil && !validate.HasGitChanges(workDir) {
 				return nil

@@ -37,6 +37,7 @@ Getting started:
 	rootCmd.AddCommand(newSidecarCmd())
 	rootCmd.AddCommand(newTaskCmd())
 	rootCmd.AddCommand(newValidateCmd())
+	rootCmd.AddCommand(newHooksCmd())
 	rootCmd.AddCommand(newUpgradeCmd())
 
 	rootCmd.AddCommand(newCommandsCmd())
