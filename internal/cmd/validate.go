@@ -151,6 +151,14 @@ func newValidateCmd() *cobra.Command {
 				}
 			}
 
+			// Validate --env flag syntax before any remote resolution so bad
+			// values are caught immediately regardless of execution mode.
+			if len(envVarsFlag) > 0 {
+				if _, vErr := sidecar.ParseEnvPairs(envVarsFlag); vErr != nil {
+					return &userError{msg: fmt.Sprintf("invalid --env value: %s", vErr), err: vErr}
+				}
+			}
+
 			if dryRun {
 				return runValidateDryRun(cfg, name, inlineCmd, statusFn)
 			}
@@ -169,14 +177,6 @@ func newValidateCmd() *cobra.Command {
 			// (--remote or --sidecar-id), meaning every command runs there.
 			// Per-command routing only applies when the sidecar is resolved implicitly.
 			allRemote := remote || sidecarID != ""
-
-			// Validate --env flag syntax before any remote resolution so bad
-			// values are caught immediately regardless of execution mode.
-			if len(envVarsFlag) > 0 {
-				if _, vErr := sidecar.ParseEnvPairs(envVarsFlag); vErr != nil {
-					return &userError{msg: fmt.Sprintf("invalid --env value: %s", vErr), err: vErr}
-				}
-			}
 
 			image := resolveImage(name, cfg)
 
