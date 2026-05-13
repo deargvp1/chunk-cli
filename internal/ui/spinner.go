@@ -6,6 +6,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"golang.org/x/term"
 )
 
 var frames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -32,7 +34,7 @@ type Spinner struct {
 func NewSpinner() *Spinner {
 	return &Spinner{
 		w:     os.Stderr,
-		isTTY: stderrColorEnabled,
+		isTTY: term.IsTerminal(int(os.Stderr.Fd())),
 	}
 }
 
