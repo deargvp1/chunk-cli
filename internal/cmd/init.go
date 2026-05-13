@@ -48,7 +48,7 @@ func writeSettings(workDir string, commands []config.Command, streams iostream.S
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return &userError{
 			msg:        "Could not create .claude directory.",
-			suggestion: "Check file permissions.",
+			suggestion: suggestionCheckPerms,
 			err:        fmt.Errorf("create .claude dir: %w", err),
 		}
 	}
@@ -59,7 +59,7 @@ func writeSettings(workDir string, commands []config.Command, streams iostream.S
 		if !errors.Is(readErr, fs.ErrNotExist) {
 			return &userError{
 				msg:        "Could not read .claude/settings.json.",
-				suggestion: "Check file permissions.",
+				suggestion: suggestionCheckPerms,
 				err:        fmt.Errorf("read existing settings.json: %w", readErr),
 			}
 		}
@@ -67,7 +67,7 @@ func writeSettings(workDir string, commands []config.Command, streams iostream.S
 		if err := os.WriteFile(path, withTrailingNewline(generated), 0o644); err != nil {
 			return &userError{
 				msg:        "Could not write .claude/settings.json.",
-				suggestion: "Check file permissions.",
+				suggestion: suggestionCheckPerms,
 				err:        fmt.Errorf("write settings.json: %w", err),
 			}
 		}
@@ -119,7 +119,7 @@ func writeSettings(workDir string, commands []config.Command, streams iostream.S
 	if err := os.WriteFile(path, withTrailingNewline(result.Merged), 0o644); err != nil {
 		return &userError{
 			msg:        "Could not write .claude/settings.json.",
-			suggestion: "Check file permissions.",
+			suggestion: suggestionCheckPerms,
 			err:        fmt.Errorf("write settings.json: %w", err),
 		}
 	}
@@ -229,14 +229,14 @@ hook config files.`,
 				var err error
 				workDir, err = os.Getwd()
 				if err != nil {
-					return &userError{msg: "Could not determine working directory.", err: err}
+					return &userError{msg: msgCouldNotDetermineWorkDir, err: err}
 				}
 			}
 
 			gitCmd := exec.Command("git", "rev-parse", "--git-dir")
 			gitCmd.Dir = workDir
 			if err := gitCmd.Run(); err != nil {
-				return &userError{msg: "Not a git repository.", suggestion: "Run this command from inside a git repo.", err: err}
+				return &userError{msg: "Not a git repository.", suggestion: suggestionGitRepo, err: err}
 			}
 
 			// Guard: exit cleanly if config exists and --force not set
@@ -291,7 +291,7 @@ hook config files.`,
 			if err := config.SaveProjectConfig(workDir, cfg); err != nil {
 				return &userError{
 					msg:        "Could not write .chunk/config.json.",
-					suggestion: "Check file permissions.",
+					suggestion: suggestionCheckPerms,
 					err:        fmt.Errorf("write config: %w", err),
 				}
 			}
