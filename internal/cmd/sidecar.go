@@ -133,7 +133,7 @@ func newSidecarListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			sidecars, err := sidecar.List(cmd.Context(), client, resolvedOrgID, all)
+			sidecars, err := client.ListSidecars(cmd.Context(), resolvedOrgID, all)
 			if err != nil {
 				if errors.Is(err, circleci.ErrNotAuthorized) {
 					if all {

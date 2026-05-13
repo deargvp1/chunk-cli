@@ -87,33 +87,21 @@ func TestListSidecars(t *testing.T) {
 	t.Run("omits all param by default", func(t *testing.T) {
 		fake.Recorder.AllRequests() // baseline
 		_, err := client.ListSidecars(ctx, "org-1", false)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		assert.NilError(t, err)
 		reqs := fake.Recorder.AllRequests()
 		last := reqs[len(reqs)-1]
-		if last.Method != "GET" {
-			t.Errorf("expected GET, got %s", last.Method)
-		}
-		if got := last.URL.Query().Get("org_id"); got != "org-1" {
-			t.Errorf("expected org_id=org-1, got %s", got)
-		}
-		if got := last.URL.Query().Get("all"); got != "" {
-			t.Errorf("expected no all param, got %s", got)
-		}
+		assert.Equal(t, last.Method, "GET")
+		assert.Equal(t, last.URL.Query().Get("org_id"), "org-1")
+		assert.Equal(t, last.URL.Query().Get("all"), "")
 	})
 
 	t.Run("sends all=true when requested", func(t *testing.T) {
 		fake.Recorder.AllRequests() // baseline
 		_, err := client.ListSidecars(ctx, "org-1", true)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		assert.NilError(t, err)
 		reqs := fake.Recorder.AllRequests()
 		last := reqs[len(reqs)-1]
-		if got := last.URL.Query().Get("all"); got != "true" {
-			t.Errorf("expected all=true, got %q", got)
-		}
+		assert.Equal(t, last.URL.Query().Get("all"), "true")
 	})
 }
 
