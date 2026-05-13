@@ -37,7 +37,7 @@ chunk validate --list       # list configured commands
 
 ### Sidecar Environments
 
-Create and work in cloud sidecar environments. Sidecars are available to CircleCI customers on Performance and Scale plans.
+Create and work in cloud sidecar environments. Sidecars are available to CircleCI customers on a paid plan. Share feedback in the [CircleCI Discord](https://discord.gg/circleci).
 
 ```bash
 # Authenticate
@@ -86,6 +86,8 @@ chunk sidecar snapshot create --name checkpoint
 # Later:
 chunk sidecar create --name new-sidecar --image <snapshot-id>
 ```
+
+**Note:** `snapshot create` consumes the source sidecar — it is deleted once the snapshot is captured and cannot be reused. To resume work, launch a new sidecar from the snapshot with `chunk sidecar create --image <snapshot-id>`.
 
 ### Context Generation
 

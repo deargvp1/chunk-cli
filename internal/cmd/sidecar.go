@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 
+	petname "github.com/dustinkirkland/golang-petname"
 	"github.com/spf13/cobra"
 
 	"github.com/CircleCI-Public/chunk-cli/envbuilder"
@@ -22,6 +23,10 @@ import (
 	"github.com/CircleCI-Public/chunk-cli/internal/tui"
 	"github.com/CircleCI-Public/chunk-cli/internal/ui"
 )
+
+func randomSidecarName() string {
+	return petname.Generate(3, "-")
+}
 
 func newSidecarCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -47,11 +52,11 @@ func newSidecarCmd() *cobra.Command {
 }
 
 // resolveSidecarID fills in sidecarID from the active sidecar file if it is empty.
-func resolveSidecarID(sidecarID *string) error {
+func resolveSidecarID(ctx context.Context, sidecarID *string) error {
 	if *sidecarID != "" {
 		return nil
 	}
-	active, err := sidecar.LoadActive()
+	active, err := sidecar.LoadActive(ctx)
 	if err != nil {
 		return &userError{msg: "Could not load the active sidecar.", suggestion: configFilePermHint, err: err}
 	}
@@ -112,6 +117,7 @@ func orgPicker(ctx context.Context, client *circleci.Client) func() (string, err
 
 func newSidecarListCmd() *cobra.Command {
 	var orgID string
+	var jsonOut bool
 
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -137,6 +143,9 @@ func newSidecarListCmd() *cobra.Command {
 					err:        err,
 				}
 			}
+			if jsonOut {
+				return iostream.PrintJSON(io.Out, sidecars)
+			}
 			if len(sidecars) == 0 {
 				io.ErrPrintln(ui.Dim("No sidecars found"))
 				return nil
@@ -149,11 +158,10 @@ func newSidecarListCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&orgID, "org-id", "", "Organization ID")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 
 	return cmd
 }
-
-const defaultProvider = "e2b"
 
 func newSidecarCreateCmd() *cobra.Command {
 	var orgID, name, image string
@@ -161,23 +169,21 @@ func newSidecarCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a sidecar",
-		Long: "Create a sidecar.\n\nThe sidecar backend defaults to e2b. Override with the " + config.EnvSidecarProvider +
-			"\nenvironment variable (e.g. " + config.EnvSidecarProvider + "=unikraft).",
+		Long:  "Create a sidecar.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			io := iostream.FromCmd(cmd)
 			client, err := ensureCircleCIClient(cmd.Context(), io, tui.PromptHidden)
 			if err != nil {
 				return err
 			}
+			if name == "" {
+				name = randomSidecarName()
+			}
 			resolvedOrgID, err := resolveOrgID(orgID, orgPicker(cmd.Context(), client))
 			if err != nil {
 				return err
 			}
-			provider := os.Getenv(config.EnvSidecarProvider)
-			if provider == "" {
-				provider = defaultProvider
-			}
-			sb, err := sidecar.Create(cmd.Context(), client, resolvedOrgID, name, provider, image)
+			sb, err := sidecar.Create(cmd.Context(), client, resolvedOrgID, name, image)
 			if err != nil {
 				if err := notAuthorized("create sidecars", err); err != nil {
 					return err
@@ -189,7 +195,7 @@ func newSidecarCreateCmd() *cobra.Command {
 				}
 			}
 			io.ErrPrintf("%s\n", ui.Success(fmt.Sprintf("Created sidecar %s (%s)", sb.Name, sb.ID)))
-			if err := sidecar.SaveActive(sidecar.ActiveSidecar{SidecarID: sb.ID, Name: sb.Name}); err != nil {
+			if err := sidecar.SaveActive(cmd.Context(), sidecar.ActiveSidecar{SidecarID: sb.ID, Name: sb.Name}); err != nil {
 				io.ErrPrintf("warning: could not save active sidecar: %v\n", err)
 			} else {
 				io.ErrPrintf("Set %s as active sidecar\n", sb.ID)
@@ -199,9 +205,8 @@ func newSidecarCreateCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&orgID, "org-id", "", "Organization ID")
-	cmd.Flags().StringVar(&name, "name", "", "Sidecar name")
+	cmd.Flags().StringVar(&name, "name", "", "Sidecar name (auto-generated if not provided)")
 	cmd.Flags().StringVar(&image, "image", "", "E2B template ID or container image")
-	_ = cmd.MarkFlagRequired("name")
 
 	return cmd
 }
@@ -216,7 +221,7 @@ func newSidecarExecCmd() *cobra.Command {
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			io := iostream.FromCmd(cmd)
-			if err := resolveSidecarID(&sidecarID); err != nil {
+			if err := resolveSidecarID(cmd.Context(), &sidecarID); err != nil {
 				return err
 			}
 			client, err := ensureCircleCIClient(cmd.Context(), io, tui.PromptHidden)
@@ -260,7 +265,7 @@ func newSidecarAddSSHKeyCmd() *cobra.Command {
 		Short: "Add an SSH public key to a sidecar",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			io := iostream.FromCmd(cmd)
-			if err := resolveSidecarID(&sidecarID); err != nil {
+			if err := resolveSidecarID(cmd.Context(), &sidecarID); err != nil {
 				return err
 			}
 			client, err := ensureCircleCIClient(cmd.Context(), io, tui.PromptHidden)
@@ -315,7 +320,7 @@ func newSidecarSSHCmd() *cobra.Command {
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			io := iostream.FromCmd(cmd)
-			if err := resolveSidecarID(&sidecarID); err != nil {
+			if err := resolveSidecarID(cmd.Context(), &sidecarID); err != nil {
 				return err
 			}
 			authSock := os.Getenv(config.EnvSSHAuthSock)
@@ -386,7 +391,7 @@ func newSidecarSyncCmd() *cobra.Command {
 		Short: "Sync files to a sidecar",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			io := iostream.FromCmd(cmd)
-			if err := resolveSidecarID(&sidecarID); err != nil {
+			if err := resolveSidecarID(cmd.Context(), &sidecarID); err != nil {
 				return err
 			}
 			authSock := os.Getenv(config.EnvSSHAuthSock)
@@ -450,7 +455,7 @@ func newSidecarUseCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			io := iostream.FromCmd(cmd)
-			if err := sidecar.SaveActive(sidecar.ActiveSidecar{SidecarID: args[0]}); err != nil {
+			if err := sidecar.SaveActive(cmd.Context(), sidecar.ActiveSidecar{SidecarID: args[0]}); err != nil {
 				return &userError{msg: "Could not save the active sidecar.", suggestion: configFilePermHint, err: err}
 			}
 			io.ErrPrintf("Set %s as active sidecar\n", args[0])
@@ -460,18 +465,26 @@ func newSidecarUseCmd() *cobra.Command {
 }
 
 func newSidecarCurrentCmd() *cobra.Command {
-	return &cobra.Command{
+	var jsonOut bool
+
+	cmd := &cobra.Command{
 		Use:   "current",
 		Short: "Show the active sidecar",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			io := iostream.FromCmd(cmd)
-			active, err := sidecar.LoadActive()
+			active, err := sidecar.LoadActive(cmd.Context())
 			if err != nil {
 				return &userError{msg: "Could not load the active sidecar.", suggestion: configFilePermHint, err: err}
 			}
 			if active == nil {
+				if jsonOut {
+					return iostream.PrintJSON(io.Out, struct{}{})
+				}
 				io.ErrPrintln("No active sidecar")
 				return nil
+			}
+			if jsonOut {
+				return iostream.PrintJSON(io.Out, active)
 			}
 			if active.Name != "" {
 				io.Printf("%s  %s\n", active.Name, active.SidecarID)
@@ -481,6 +494,10 @@ func newSidecarCurrentCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
+
+	return cmd
 }
 
 func newSidecarForgetCmd() *cobra.Command {
@@ -489,7 +506,7 @@ func newSidecarForgetCmd() *cobra.Command {
 		Short: "Clear the active sidecar",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			io := iostream.FromCmd(cmd)
-			if err := sidecar.ClearActive(); err != nil {
+			if err := sidecar.ClearActive(cmd.Context()); err != nil {
 				return &userError{msg: "Could not clear the active sidecar.", suggestion: configFilePermHint, err: err}
 			}
 			io.ErrPrintln("Active sidecar cleared")
@@ -660,10 +677,19 @@ func newSidecarSnapshotCreateCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "create",
-		Short: "Create a snapshot of a sidecar",
+		Short: "Create a snapshot of a sidecar and delete the source sidecar",
+		Long: `Create a snapshot of a sidecar and delete the source sidecar.
+
+Once the snapshot is captured, the source sidecar is deleted to avoid
+leaking the build instance. If the deleted sidecar was the active one,
+the local active-sidecar state is cleared. Launch a new sidecar from the
+snapshot with 'chunk sidecar create --image <snapshot-id>'.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			io := iostream.FromCmd(cmd)
-			if err := resolveSidecarID(&sidecarID); err != nil {
+			if len(name) > 255 {
+				return fmt.Errorf("snapshot name must be 255 characters or fewer (got %d)", len(name))
+			}
+			if err := resolveSidecarID(cmd.Context(), &sidecarID); err != nil {
 				return err
 			}
 			client, err := ensureCircleCIClient(cmd.Context(), io, tui.PromptHidden)
@@ -675,18 +701,33 @@ func newSidecarSnapshotCreateCmd() *cobra.Command {
 				return err
 			}
 			io.ErrPrintf("%s\n", ui.Success(fmt.Sprintf("Created snapshot %s", snap.ID)))
+
+			if err := client.DeleteSidecar(cmd.Context(), sidecarID); err != nil {
+				io.ErrPrintf("Warning: could not delete sidecar %s: %v\n", sidecarID, err)
+				io.ErrPrintf("Delete the sidecar manually, or wait for it to expire.\n")
+				return nil
+			}
+			io.ErrPrintf("%s\n", ui.Success(fmt.Sprintf("Deleted sidecar %s", sidecarID)))
+
+			if active, lerr := sidecar.LoadActive(cmd.Context()); lerr == nil && active != nil && active.SidecarID == sidecarID {
+				if cerr := sidecar.ClearActive(cmd.Context()); cerr != nil {
+					io.ErrPrintf("Warning: could not clear active sidecar state: %v\n", cerr)
+				}
+			}
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&sidecarID, "sidecar-id", "", "Sidecar ID (defaults to active sidecar)")
-	cmd.Flags().StringVar(&name, "name", "", "Snapshot name")
+	cmd.Flags().StringVar(&name, "name", "", "Snapshot name (max 255 characters)")
 	_ = cmd.MarkFlagRequired("name")
 
 	return cmd
 }
 
 func newSidecarSnapshotGetCmd() *cobra.Command {
+	var jsonOut bool
+
 	cmd := &cobra.Command{
 		Use:   "get <snapshot-id>",
 		Short: "Get a snapshot by ID",
@@ -701,6 +742,9 @@ func newSidecarSnapshotGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if jsonOut {
+				return iostream.PrintJSON(io.Out, snap)
+			}
 			if snap.Name != "" {
 				io.Printf("%s  %s\n", snap.Name, snap.ID)
 			} else {
@@ -709,6 +753,8 @@ func newSidecarSnapshotGetCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 
 	return cmd
 }
@@ -772,14 +818,9 @@ Example:
 			status(iostream.LevelInfo, fmt.Sprintf("stack: %s", env.Stack))
 
 			// Step 2: Resolve or create sidecar.
-			provider := os.Getenv(config.EnvSidecarProvider)
-			if provider == "" {
-				provider = defaultProvider
-			}
-			var workspace string
 			if sidecarID == "" {
 				var resolveErr error
-				sidecarID, _, workspace, resolveErr = sidecarSetupResolveSidecar(cmd.Context(), client, orgID, name, provider, status, streams)
+				sidecarID, _, resolveErr = sidecarSetupResolveSidecar(cmd.Context(), client, orgID, name, status, streams)
 				if resolveErr != nil {
 					return resolveErr
 				}
@@ -802,7 +843,7 @@ Example:
 			}
 
 			// Step 5: Run setup steps over SSH.
-			if err := sidecarSetupRunSetup(cmd.Context(), client, sidecarID, identityFile, authSock, env, workspace, streams, status); err != nil {
+			if err := sidecarSetupRunSetup(cmd.Context(), client, sidecarID, identityFile, authSock, env, streams, status); err != nil {
 				return err
 			}
 
@@ -827,46 +868,42 @@ Example:
 func sidecarSetupResolveSidecar(
 	ctx context.Context,
 	client *circleci.Client,
-	orgID, name, provider string,
+	orgID, name string,
 	status iostream.StatusFunc,
 	streams iostream.Streams,
-) (id, displayName, workspace string, err error) {
-	active, err := sidecar.LoadActive()
+) (id, displayName string, err error) {
+	active, err := sidecar.LoadActive(ctx)
 	if err != nil {
-		return "", "", "", &userError{msg: "Could not load the active sidecar.", suggestion: configFilePermHint, err: err}
+		return "", "", &userError{msg: "Could not load the active sidecar.", suggestion: configFilePermHint, err: err}
 	}
 	if active != nil {
 		status(iostream.LevelInfo, fmt.Sprintf("using active sidecar %s", active.SidecarID))
-		return active.SidecarID, active.Name, active.Workspace, nil
+		return active.SidecarID, active.Name, nil
 	}
 	if name == "" {
-		return "", "", "", &userError{
-			msg:        "No active sidecar and --name not provided.",
-			suggestion: "Pass --name to create a new sidecar, or run 'chunk sidecar use <id>'.",
-			errMsg:     "no active sidecar and --name not provided",
-		}
+		name = randomSidecarName()
 	}
 	resolvedOrgID, err := resolveOrgID(orgID, orgPicker(ctx, client))
 	if err != nil {
-		return "", "", "", err
+		return "", "", err
 	}
 	status(iostream.LevelStep, fmt.Sprintf("Creating sidecar %q...", name))
-	sc, err := sidecar.Create(ctx, client, resolvedOrgID, name, provider, "")
+	sc, err := sidecar.Create(ctx, client, resolvedOrgID, name, "")
 	if err != nil {
 		if authErr := notAuthorized("create sidecars", err); authErr != nil {
-			return "", "", "", authErr
+			return "", "", authErr
 		}
-		return "", "", "", &userError{
+		return "", "", &userError{
 			msg:        "Could not create the sidecar.",
 			suggestion: "Check your network connection and try again.",
 			err:        err,
 		}
 	}
-	if saveErr := sidecar.SaveActive(sidecar.ActiveSidecar{SidecarID: sc.ID, Name: sc.Name}); saveErr != nil {
+	if saveErr := sidecar.SaveActive(ctx, sidecar.ActiveSidecar{SidecarID: sc.ID, Name: sc.Name}); saveErr != nil {
 		streams.ErrPrintf("warning: could not save active sidecar: %v\n", saveErr)
 	}
 	status(iostream.LevelDone, fmt.Sprintf("Created sidecar %s (%s)", sc.Name, sc.ID))
-	return sc.ID, sc.Name, "", nil
+	return sc.ID, sc.Name, nil
 }
 
 func sidecarSetupEnsureSSHKey(identityFile string, status iostream.StatusFunc) error {
@@ -926,7 +963,6 @@ func sidecarSetupRunSetup(
 	client *circleci.Client,
 	sidecarID, identityFile, authSock string,
 	env *envbuilder.Environment,
-	workspace string,
 	streams iostream.Streams,
 	status iostream.StatusFunc,
 ) error {
@@ -935,11 +971,11 @@ func sidecarSetupRunSetup(
 		return nil
 	}
 
-	ws := workspace
-	if ws == "" {
-		if active, lerr := sidecar.LoadActive(); lerr == nil && active != nil && active.Workspace != "" {
-			ws = active.Workspace
-		}
+	// ws is non-empty only when re-attaching to a pre-existing sidecar that had a
+	// workspace saved; for freshly created sidecars it stays "".
+	var ws string
+	if active, lerr := sidecar.LoadActive(ctx); lerr == nil && active != nil {
+		ws = active.Workspace
 	}
 
 	for _, step := range env.Setup {

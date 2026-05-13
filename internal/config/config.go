@@ -38,7 +38,6 @@ const (
 	EnvGitHubAPIURL     = "GITHUB_API_URL"
 	EnvModel            = "CODE_REVIEW_CLI_MODEL"
 	EnvCircleCIOrgID    = "CIRCLECI_ORG_ID"
-	EnvSidecarProvider  = "CHUNK_SIDECAR_PROVIDER"
 )
 
 // System/standard environment variable names.
@@ -49,7 +48,7 @@ const (
 	EnvNoColor       = "NO_COLOR"
 	EnvXDGConfigHome = "XDG_CONFIG_HOME"
 	EnvXDGStateHome  = "XDG_STATE_HOME"
-	EnvClaudeSession = "CLAUDE_SESSION_ID"
+	EnvXDGDataHome   = "XDG_DATA_HOME"
 )
 
 // EnvVars holds all environment variables the application reads.
@@ -65,14 +64,13 @@ type EnvVars struct {
 	GitHubAPIURL     string `env:"GITHUB_API_URL,default=https://api.github.com"`
 	Model            string `env:"CODE_REVIEW_CLI_MODEL"`
 	CircleCIOrgID    string `env:"CIRCLECI_ORG_ID"`
-	SidecarProvider  string `env:"CHUNK_SIDECAR_PROVIDER"`
 	Home             string `env:"HOME"`
 	Shell            string `env:"SHELL"`
 	SSHAuthSock      string `env:"SSH_AUTH_SOCK"`
 	NoColor          string `env:"NO_COLOR"`
 	XDGConfigHome    string `env:"XDG_CONFIG_HOME"`
 	XDGStateHome     string `env:"XDG_STATE_HOME"`
-	ClaudeSession    string `env:"CLAUDE_SESSION_ID"`
+	XDGDataHome      string `env:"XDG_DATA_HOME"`
 }
 
 // LoadEnv populates an EnvVars struct from the process environment.

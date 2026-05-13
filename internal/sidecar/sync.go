@@ -17,22 +17,25 @@ import (
 
 const workspaceDir = "./workspace"
 
-// resolveWorkspace determines the workspace path. Priority:
-// 1. CLI --workdir flag  2. sidecar.json workspace  3. default.
-func resolveWorkspace(cliWorkdir, repo string) string {
+// ResolveWorkspace determines the workspace path. Priority:
+// 1. CLI --workdir flag  2. sidecar.json workspace  3. default ./workspace/<repo>.
+func ResolveWorkspace(ctx context.Context, cliWorkdir, repo string) string {
 	if cliWorkdir != "" {
 		return cliWorkdir
 	}
-	if active, err := LoadActive(); err == nil && active != nil && active.Workspace != "" {
+	if active, err := LoadActive(ctx); err == nil && active != nil && active.Workspace != "" {
 		return active.Workspace
+	}
+	if repo == "" {
+		return workspaceDir
 	}
 	return workspaceDir + "/" + repo
 }
 
 // persistWorkspace saves the resolved workspace back to the sidecar file if it
 // differs from the current value.
-func persistWorkspace(workspace string) error {
-	active, err := LoadActive()
+func persistWorkspace(ctx context.Context, workspace string) error {
+	active, err := LoadActive(ctx)
 	if err != nil {
 		return err
 	}
@@ -40,7 +43,7 @@ func persistWorkspace(workspace string) error {
 		return nil
 	}
 	active.Workspace = workspace
-	return SaveActive(*active)
+	return SaveActive(ctx, *active)
 }
 
 // Sync synchronises local changes to a sidecar over SSH.
@@ -65,9 +68,9 @@ func Sync(ctx context.Context,
 		return fmt.Errorf("sync: %w", err)
 	}
 
-	repoPath := resolveWorkspace(workdir, repo)
+	repoPath := ResolveWorkspace(ctx, workdir, repo)
 
-	if err := persistWorkspace(repoPath); err != nil {
+	if err := persistWorkspace(ctx, repoPath); err != nil {
 		status(iostream.LevelWarn, fmt.Sprintf("Could not save workspace: %v", err))
 	}
 
@@ -120,12 +123,12 @@ func BundleSync(ctx context.Context,
 		return fmt.Errorf("bundle sync: %w", err)
 	}
 
-	repoPath := resolveWorkspace(workdir, repo)
-	if err := persistWorkspace(repoPath); err != nil {
+	repoPath := ResolveWorkspace(ctx, workdir, repo)
+	if err := persistWorkspace(ctx, repoPath); err != nil {
 		status(iostream.LevelWarn, fmt.Sprintf("Could not save workspace: %v", err))
 	}
 
-	active, err := LoadActive()
+	active, err := LoadActive(ctx)
 	if err != nil {
 		return fmt.Errorf("bundle sync: load active sidecar: %w", err)
 	}
@@ -204,7 +207,7 @@ func BundleSync(ctx context.Context,
 
 	// Persist the synced ref.
 	active.LastSyncedRef = headRef
-	if err := SaveActive(*active); err != nil {
+	if err := SaveActive(ctx, *active); err != nil {
 		status(iostream.LevelWarn, fmt.Sprintf("Could not save last synced ref: %v", err))
 	}
 
