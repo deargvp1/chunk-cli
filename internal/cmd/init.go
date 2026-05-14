@@ -237,6 +237,21 @@ func writeTestSuites(workDir string, streams iostream.Streams) error {
 	return nil
 }
 
+// printTestSuitesHint prints onboarding guidance for scaffolding
+// .circleci/test-suites.yml. Skipped when the file already exists.
+// The schema description is intentionally agent-actionable: an AI agent
+// reading the init output has enough to draft the file for any language.
+func printTestSuitesHint(workDir string, streams iostream.Streams) {
+	if _, err := os.Stat(filepath.Join(workDir, ".circleci", "test-suites.yml")); err == nil {
+		return
+	}
+	streams.ErrPrintln("")
+	streams.ErrPrintln(ui.Bold("Next step: scaffold .circleci/test-suites.yml for Smarter Testing"))
+	streams.ErrPrintln(ui.Dim("  Ask your AI coding agent to scaffold .circleci/test-suites.yml — the"))
+	streams.ErrPrintln(ui.Dim("  chunk-sidecar skill covers the file shape and per-language patterns."))
+	streams.ErrPrintln(ui.Dim("  Or rerun with --skip-test-suites=false to use built-in Go/pytest templates."))
+}
+
 func newInitCmd() *cobra.Command {
 	var force, skipHooks, skipValidate, skipCompletions, skipSkills, skipTestSuites bool
 	var projectDir string
@@ -354,7 +369,9 @@ hook config files.`,
 			}
 
 			// Step 5: CircleCI Smarter Testing test-suites.yml
-			if !skipTestSuites {
+			if skipTestSuites {
+				printTestSuitesHint(workDir, streams)
+			} else {
 				if err := writeTestSuites(workDir, streams); err != nil {
 					streams.ErrPrintf("%s\n", ui.Warning(fmt.Sprintf("Could not write .circleci/test-suites.yml: %v", err)))
 				}
@@ -375,7 +392,7 @@ hook config files.`,
 	cmd.Flags().BoolVar(&skipValidate, "skip-validate", false, "Skip validate command detection")
 	cmd.Flags().BoolVar(&skipCompletions, "skip-completions", false, "Skip shell completion installation")
 	cmd.Flags().BoolVar(&skipSkills, "skip-skills", false, "Skip agent skill installation")
-	cmd.Flags().BoolVar(&skipTestSuites, "skip-test-suites", false, "Skip CircleCI test-suites.yml generation")
+	cmd.Flags().BoolVar(&skipTestSuites, "skip-test-suites", true, "Skip CircleCI test-suites.yml generation (default: skip; pass =false to use built-in Go/pytest templates)")
 	cmd.Flags().StringVar(&projectDir, "project-dir", "", "Project directory (defaults to current directory)")
 
 	return cmd

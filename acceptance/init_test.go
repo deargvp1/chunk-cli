@@ -555,7 +555,7 @@ func TestInitWritesTestSuitesForGoWhenCircleDirExists(t *testing.T) {
 	env.AnthropicKey = ""
 
 	result := binary.RunCLI(t, []string{
-		"init", "--skip-hooks",
+		"init", "--skip-hooks", "--skip-test-suites=false",
 	}, env, workDir)
 
 	assert.Equal(t, result.ExitCode, 0, "stdout: %s\nstderr: %s", result.Stdout, result.Stderr)
@@ -575,7 +575,7 @@ func TestInitCreatesCircleDirAndWritesTestSuites(t *testing.T) {
 	env.AnthropicKey = ""
 
 	result := binary.RunCLI(t, []string{
-		"init", "--skip-hooks",
+		"init", "--skip-hooks", "--skip-test-suites=false",
 	}, env, workDir)
 
 	assert.Equal(t, result.ExitCode, 0, "stdout: %s\nstderr: %s", result.Stdout, result.Stderr)
@@ -598,7 +598,7 @@ func TestInitDoesNotOverwriteExistingTestSuites(t *testing.T) {
 	env.AnthropicKey = ""
 
 	result := binary.RunCLI(t, []string{
-		"init", "--skip-hooks",
+		"init", "--skip-hooks", "--skip-test-suites=false",
 	}, env, workDir)
 
 	assert.Equal(t, result.ExitCode, 0, "stdout: %s\nstderr: %s", result.Stdout, result.Stderr)
@@ -608,7 +608,7 @@ func TestInitDoesNotOverwriteExistingTestSuites(t *testing.T) {
 	assert.Equal(t, string(data), string(existing), "existing test-suites.yml should be preserved")
 }
 
-func TestInitSkipTestSuitesFlag(t *testing.T) {
+func TestInitSkipsTestSuitesByDefault(t *testing.T) {
 	workDir := gitrepo.SetupGitRepo(t, "my-org", "my-repo")
 	assert.NilError(t, os.WriteFile(filepath.Join(workDir, "go.mod"), []byte("module example.com/m\n"), 0o644))
 	assert.NilError(t, os.MkdirAll(filepath.Join(workDir, ".circleci"), 0o755))
@@ -617,13 +617,18 @@ func TestInitSkipTestSuitesFlag(t *testing.T) {
 	env.AnthropicKey = ""
 
 	result := binary.RunCLI(t, []string{
-		"init", "--skip-hooks", "--skip-test-suites",
+		"init", "--skip-hooks",
 	}, env, workDir)
 
 	assert.Equal(t, result.ExitCode, 0, "stdout: %s\nstderr: %s", result.Stdout, result.Stderr)
 
 	_, err := os.Stat(filepath.Join(workDir, ".circleci", "test-suites.yml"))
-	assert.Assert(t, os.IsNotExist(err), "expected --skip-test-suites to suppress write, err=%v", err)
+	assert.Assert(t, os.IsNotExist(err), "expected default to skip write, err=%v", err)
+
+	assert.Assert(t, strings.Contains(result.Stderr, "Smarter Testing"),
+		"expected hint in stderr, got: %s", result.Stderr)
+	assert.Assert(t, strings.Contains(result.Stderr, "test-suites.yml"),
+		"expected hint to mention test-suites.yml, got: %s", result.Stderr)
 }
 
 func TestInitProjectDirNotGitRepo(t *testing.T) {
