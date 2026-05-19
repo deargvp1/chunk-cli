@@ -150,15 +150,7 @@ func newValidateCmd() *cobra.Command {
 			}
 
 			if dryRun {
-				if inlineCmd != "" {
-					cmdName := name
-					if cmdName == "" {
-						cmdName = "custom"
-					}
-					statusFn(iostream.LevelInfo, fmt.Sprintf("%s: %s", cmdName, inlineCmd))
-					return nil
-				}
-				return mapValidateError(validate.RunDryRun(cfg, name, statusFn))
+				return runValidateDryRun(cfg, name, inlineCmd, statusFn)
 			}
 
 			// Hook: fail early when CircleCI auth is missing and remote commands need it.
@@ -217,6 +209,18 @@ func newValidateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&projectDir, "project", "", "Override project directory")
 
 	return cmd
+}
+
+func runValidateDryRun(cfg *config.ProjectConfig, name, inlineCmd string, statusFn iostream.StatusFunc) error {
+	if inlineCmd != "" {
+		cmdName := name
+		if cmdName == "" {
+			cmdName = "custom"
+		}
+		statusFn(iostream.LevelInfo, fmt.Sprintf("%s: %s", cmdName, inlineCmd))
+		return nil
+	}
+	return mapValidateError(validate.RunDryRun(cfg, name, statusFn))
 }
 
 // runValidate dispatches to the appropriate Run* function based on the
@@ -328,14 +332,32 @@ func openSSHSession(ctx context.Context, sidecarID, identityFile, workdir string
 	cwd, _ := os.Getwd()
 	_, repo, _ := gitremote.DetectOrgAndRepo(cwd)
 	dest := sidecar.ResolveWorkspace(ctx, workdir, repo)
+	rc, err := config.Resolve("", "")
+	if err != nil {
+		return nil, "", &userError{msg: "Could not resolve config.", err: err}
+	}
+	envVars := hostForwardEnv(rc.CircleCIToken)
 	execFn := func(ctx context.Context, script string) (string, string, int, error) {
-		result, err := sidecar.ExecOverSSH(ctx, session, "sh -c "+sidecar.ShellEscape(script), nil, nil)
+		result, err := sidecar.ExecOverSSH(ctx, session, "sh -c "+sidecar.ShellEscape(script), nil, envVars)
 		if err != nil {
 			return "", "", 0, err
 		}
 		return result.Stdout, result.Stderr, result.ExitCode, nil
 	}
 	return execFn, dest, nil
+}
+
+// hostForwardEnv collects host environment variables that should be forwarded
+// into commands running on the sidecar. The resolved CircleCI token (which may
+// come from env, the on-disk config, or any future keychain backend) is
+// forwarded as CIRCLE_TOKEN so remote validate commands can authenticate to
+// CircleCI APIs (e.g. smarter-testing endpoints), mirroring the local behavior
+// where the token is picked up from the resolved config.
+func hostForwardEnv(token string) map[string]string {
+	if token == "" {
+		return nil
+	}
+	return map[string]string{config.EnvCircleToken: token}
 }
 
 // runSplitCommands handles per-command remote routing when no specific command
