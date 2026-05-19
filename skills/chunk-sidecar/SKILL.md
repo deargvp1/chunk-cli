@@ -20,7 +20,7 @@ allowed-tools:
 
 Run the user's build, test, and validate commands on a remote `chunk` sidecar instead of locally. The 90% job is the **sync → validate** loop. This skill also covers one-time setup (create, snapshot, environment customization).
 
-Sidecars are ephemeral Linux environments provisioned via CircleCI. They isolate work, avoid local port conflicts, and can be reset to known-good snapshots. Your local tree is mirrored to `~/workspace/<repo>` on the sidecar each time you sync — the absolute path depends on the SSH user's home (e.g. `/home/circleci/workspace/<repo>` on `cimg/*` images, `/home/user/workspace/<repo>` on the default Ubuntu template). To see the resolved workspace, run `chunk sidecar current --json` and read the `Workspace` field.
+Sidecars are ephemeral Linux environments provisioned via CircleCI. They isolate work, avoid local port conflicts, and can be reset to known-good snapshots. Your local tree is mirrored to `~/workspace/<repo>` on the sidecar each time you sync — the absolute path depends on the SSH user's home (e.g. `/home/circleci/workspace/<repo>` on `cimg/*` images, `/home/user/workspace/<repo>` on the default Ubuntu template). To see the resolved workspace, run `chunk sidecar current --json` and read the `workspace` field.
 
 `CIRCLE_TOKEN` is forwarded over SSH automatically, so authenticated CircleCI API calls work out of the box once a token is configured locally.
 
