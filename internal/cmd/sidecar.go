@@ -367,7 +367,6 @@ func newSidecarSSHCmd() *cobra.Command {
 	cmd.Flags().StringVar(&identityFile, "identity-file", "", "SSH identity file")
 	cmd.Flags().StringArrayVarP(&envVarsFlag, "env", "e", nil, "KEY=VALUE pairs to set in the remote session (repeatable)")
 	cmd.Flags().StringVar(&envFile, "env-file", defaultEnvFile, "Env file to load (default: .env.local; pass a path to override)")
-	cmd.Flags().Lookup("env-file").NoOptDefVal = defaultEnvFile
 
 	return cmd
 }
@@ -850,7 +849,6 @@ Example:
 	cmd.Flags().BoolVar(&force, "force", false, "Re-detect environment even if cached in .chunk/config.json")
 	cmd.Flags().StringArrayVarP(&envVarsFlag, "env", "e", nil, "KEY=VALUE pairs to set in remote sidecar session (repeatable)")
 	cmd.Flags().StringVar(&envFile, "env-file", defaultEnvFile, "Env file to load (default: .env.local; pass a path to override)")
-	cmd.Flags().Lookup("env-file").NoOptDefVal = defaultEnvFile
 
 	return cmd
 }
