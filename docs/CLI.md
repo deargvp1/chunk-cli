@@ -159,7 +159,7 @@ chunk
   failing with an error.
 - `chunk auth set github` stores a GitHub token in the config file; previously
   only the `GITHUB_TOKEN` environment variable was supported.
-- `chunk hook disable` creates a `.chunk/hooks-disabled` sentinel file; `hook enable` removes it. Hooks are also disabled when `CHUNK_HOOKS_DISABLED` is set in the environment.
+- `chunk hook disable` creates a `.chunk/hooks-disabled` sentinel file inspected by the `chunk validate` Stop hook; `hook enable` removes it. Stop-hook validation is also disabled when `CHUNK_HOOKS_DISABLED` is set in the environment.
 
 ## Config keys
 
