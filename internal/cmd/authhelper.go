@@ -66,6 +66,7 @@ func ensureCircleCIClient(ctx context.Context, cmd *cobra.Command, rc config.Res
 	streams.ErrPrintln("")
 	streams.ErrPrintln(ui.Bold("CircleCI token required"))
 	streams.ErrPrintln("Create a token at https://app.circleci.com/settings/user/tokens")
+	streams.ErrPrintln("Don't have an account? Sign up at https://app.circleci.com/signup")
 	printSaveHint(streams, "Token", insecureStorage)
 	streams.ErrPrintln("")
 
