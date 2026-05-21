@@ -226,6 +226,7 @@ func runValidateCmdE(cmd *cobra.Command, args []string, opts *validateOpts) erro
 	if hook != nil && cfg.HasRemoteCommands() && rc.CircleCIToken == "" {
 		streams.ErrPrintln("CircleCI auth is not configured.")
 		streams.ErrPrintln("Suggestion: " + suggestionCircleCIAuth)
+		streams.ErrPrintln("Don't have an account? Sign up at https://app.circleci.com/signup")
 		return errSilentExit
 	}
 
