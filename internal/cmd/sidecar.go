@@ -227,6 +227,12 @@ func newSidecarCreateCmd() *cobra.Command {
 				if err := notAuthorized("create sidecars", err); err != nil {
 					return err
 				}
+				var se *circleci.StatusError
+				if image != "" && errors.As(err, &se) && (se.StatusCode == 400 || se.StatusCode == 404) {
+					return newUserError("Could not create the sidecar.").
+						withSuggestion("--image requires a snapshot ID. Create one with 'chunk sidecar snapshot create'.").
+						wrap(err)
+				}
 				return &userError{
 					msg:        "Could not create the sidecar.",
 					suggestion: suggestionNetworkRetry,
@@ -245,7 +251,7 @@ func newSidecarCreateCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&orgID, "org-id", "", "Organization ID")
 	cmd.Flags().StringVar(&name, "name", "", "Sidecar name (auto-generated if not provided)")
-	cmd.Flags().StringVar(&image, "image", "", "E2B template ID or container image")
+	cmd.Flags().StringVar(&image, "image", "", "Snapshot ID (from 'chunk sidecar snapshot create')")
 
 	return cmd
 }
