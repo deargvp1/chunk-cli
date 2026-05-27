@@ -43,7 +43,7 @@ Chunk init will install skills for working with Chunk sidecars. After the init, 
 
 #### Sidecar Environments
 
-Create and work in cloud sidecar environments. Sidecars are available to CircleCI customers on a paid plan. Share feedback in the [CircleCI Discord](https://discord.gg/circleci).
+Create and work in cloud sidecar environments. Sidecars are available to all CircleCI customers, including the free plans. Share feedback in the [CircleCI Discord](https://discord.gg/circleci).
 
 ```bash
 # Authenticate
