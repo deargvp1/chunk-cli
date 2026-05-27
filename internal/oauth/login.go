@@ -1,13 +1,17 @@
 package oauth
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"runtime"
 	"strings"
 	"time"
+
+	"golang.org/x/term"
 )
 
 const (
@@ -58,12 +62,14 @@ func Login(ctx context.Context, cfg LoginConfig, status io.Writer) (string, erro
 		w("  " + authorizeURL)
 		w("")
 	} else {
-		w("Opening browser for CircleCI login...")
-		if err := OpenBrowser(authorizeURL); err != nil {
-			w("Could not open browser. Open this URL manually:")
-			w("")
-			w("  " + authorizeURL)
-			w("")
+		w(authorizeURL)
+		if waitForEnter(ctx, status) {
+			if err := OpenBrowser(authorizeURL); err != nil {
+				w("Could not open browser. Open this URL manually:")
+				w("")
+				w("  " + authorizeURL)
+				w("")
+			}
 		}
 	}
 	w("Waiting for login (up to 5 minutes)...")
@@ -92,6 +98,26 @@ func Login(ctx context.Context, cfg LoginConfig, status io.Writer) (string, erro
 		return "", err
 	}
 	return tok.AccessToken, nil
+}
+
+// waitForEnter prompts the user to press Enter before opening the browser.
+// Returns true if the browser should be opened, false if cancelled or non-interactive.
+func waitForEnter(ctx context.Context, status io.Writer) bool {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return true
+	}
+	_, _ = fmt.Fprint(status, "Press Enter to open CircleCI in your browser...")
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		errCh <- err
+	}()
+	select {
+	case err := <-errCh:
+		return err == nil || err == io.EOF
+	case <-ctx.Done():
+		return false
+	}
 }
 
 func buildAuthorizeURL(baseURL, redirectURI, challenge, state, deviceID string, signup bool) string {
