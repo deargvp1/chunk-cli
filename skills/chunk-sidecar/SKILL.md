@@ -1,14 +1,16 @@
 ---
 name: chunk-sidecar
 description: Use when the user says "validate on the sidecar", "run tests on the sidecar", "sync to sidecar", "sidecar dev loop", "check this on the sidecar", "validate remotely", "scaffold test-suites.yml", "set up smarter testing", or "write .circleci/test-suites.yml", or when you have made edits and want to verify them on a remote `chunk` sidecar instead of running locally. Also covers creating sidecars, snapshotting a configured environment, customizing the sidecar image via `chunk sidecar`, and scaffolding `.circleci/test-suites.yml` for CircleCI Smarter Testing.
-version: 1.4.0
+version: 1.5.0
 allowed-tools:
   - Bash(chunk --version)
   - Bash(chunk auth status)
+  - Bash(chunk config set:*)
   - Bash(chunk sidecar:*)
   - Bash(chunk validate:*)
   - Bash(cat .chunk/config.json)
   - Bash(cat .chunk/sidecar.json)
+  - Bash(test -n*)
   - Read
   - Write
   - Edit
@@ -35,6 +37,19 @@ Run these checks in order. Stop and report to the user if anything fails.
 
 Do **not** run `echo $CIRCLE_TOKEN`, `env`, `printenv`, or any other command that reads credential environment variables. That leaks secrets into conversation context. If `chunk auth status` reports a failure or shows a required credential as "Not set", surface its printed remediation (e.g. "Run `chunk auth set circleci`") and stop.
 
+3. **CircleCI orgID preflight** — run **before any** `chunk sidecar` subcommand. Interactive org selection does not work in agent sessions.
+
+   1. `cat .chunk/config.json` and confirm `orgID` is set to a non-empty value.
+   2. If `orgID` is absent from the config, check whether `CIRCLECI_ORG_ID` is set **without printing its value** (e.g. `test -n "${CIRCLECI_ORG_ID:-}"`). Do not run `printenv`, `env`, or `echo` on credential variables.
+   3. If **both** are unset, **stop** — do not call `chunk sidecar create`, `chunk sidecar list`, or any other `chunk sidecar` command. Ask the user for their org ID **exactly once** using this message:
+
+      > No CircleCI orgID found in `.chunk/config.json`. Sidecar cannot select an org in a non-interactive session. Please provide your CircleCI org ID. To persist it for future sessions, I will run: `chunk config set orgID <id>`
+
+      After the user provides the ID, run `chunk config set orgID <id>`, then continue to Step 2.
+   4. If only `CIRCLECI_ORG_ID` is set (config still lacks `orgID`), you may pass that value as `--org-id` on sidecar commands. Persisting with `chunk config set orgID <id>` is recommended but not required before Step 2.
+
+   Record the resolved org ID for Step 2: from `.chunk/config.json` after step 3, or from `CIRCLECI_ORG_ID` per step 4.
+
 ## Step 2: Find or create the active sidecar
 
 Run `chunk sidecar current`. Three cases:
@@ -45,13 +60,13 @@ Run `chunk sidecar current`. Three cases:
   chunk sidecar create --org-id <orgID> --image <sidecarImage>
   chunk sidecar sync
   ```
-  Read `orgID` and `validation.sidecarImage` from `.chunk/config.json`. Ask the user for the org ID if it is not present in the config.
-- **No active sidecar, no `sidecarImage` configured** — full environment setup is needed. Inform the user, confirm the org ID (read from `.chunk/config.json` or ask), create a sidecar, then go to Step 3:
+  Read `orgID` and `validation.sidecarImage` from `.chunk/config.json` (orgID was resolved in Step 1).
+- **No active sidecar, no `sidecarImage` configured** — full environment setup is needed. Inform the user, create a sidecar with the org ID from Step 1, then go to Step 3:
   ```
   chunk sidecar create --org-id <orgID>
   ```
 
-Always pass `--org-id` to `chunk sidecar create` — interactive org selection does not work in Claude sessions. `--name` is optional; a random adjective-adverb-noun name (e.g. `happy-quickly-tesla`) is generated automatically if omitted.
+Always pass `--org-id` to `chunk sidecar create` and `chunk sidecar snapshot list` — use the org ID resolved in Step 1. Interactive org selection does not work in agent sessions. `--name` is optional; a random adjective-adverb-noun name (e.g. `happy-quickly-tesla`) is generated automatically if omitted.
 
 ## Step 3: One-time setup
 
@@ -154,7 +169,8 @@ When `CLAUDE_SESSION_ID` is set, `chunk` auto-scopes the active-sidecar file to 
 
 ## Troubleshooting
 
-- **`no organization configured`** — pass `--org-id <id>` explicitly to the failing command. Read it from `.chunk/config.json` (`orgID` field) or ask the user.
+- **`Could not select an organization`**, **`no interactive terminal available`**, or **`Pass --org-id instead`** — orgID was missing when a sidecar command ran. Return to Step 1 orgID preflight: ask the user exactly once, then `chunk config set orgID <id>`. Do not explore peripheral commands (`chunk config show`, `chunk --help | grep -i org`, etc.).
+- **Anti-pattern: orgID absent** — if `orgID` is not in `.chunk/config.json` and `CIRCLECI_ORG_ID` is unset, do not call `chunk sidecar create` or probe the CLI for org discovery. Ask the user once and persist with `chunk config set orgID <id>`.
 - **Auth errors (401/403, "token invalid", "unauthorized")** — run `chunk auth status` and follow its printed remediation (`chunk auth set circleci` / `github` / `anthropic`). Never dump env vars.
 - **Sidecar 404 on `current`, `sync`, or `validate`** — the sidecar was deleted externally. Run `chunk sidecar forget`, then return to Step 2.
 - **`permission denied (publickey)` on sync, ssh, or exec** — the sidecar does not have your SSH key registered. Run `chunk sidecar add-ssh-key --public-key-file ~/.ssh/chunk_ai.pub` (or pass `--public-key "<ssh-ed25519 ...>"` directly). The command requires one of those flags; invoking it bare returns "A public key is required." If the issue persists, tell the user they can remove `~/.ssh/chunk_ai*` to regenerate the keypair on next use.
@@ -167,7 +183,7 @@ When `CLAUDE_SESSION_ID` is set, `chunk` auto-scopes the active-sidecar file to 
 
 This skill does **not**:
 
-- Modify `.chunk/config.json` (that is `chunk init`'s job; user-owned).
+- Hand-edit `.chunk/config.json` or run `chunk init` for bulk project setup (user-owned). The skill **may** run `chunk config set` for `orgID` (Step 1 bootstrap) and `validation.sidecarImage` (Step 3 snapshot).
 - Install or change pre-commit hooks (that is `chunk init`).
 - Run `chunk init`.
 - Edit files on the sidecar over SSH — they will be wiped by the next `sync`.
