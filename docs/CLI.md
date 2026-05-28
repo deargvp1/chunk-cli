@@ -24,7 +24,7 @@ chunk
 │
 ├── config
 │   ├── show                        # Display resolved configuration
-│   └── set <key> <value>           # Set a config value (keys: model, apiKey)
+│   └── set <key> <value>           # Set a config value (see Config keys below)
 │
 ├── init                            # Initialize project configuration
 │   --force                         # Overwrite existing config
@@ -64,8 +64,8 @@ chunk
 ├── sidecar
 │   ├── list --org-id <id>          # List sidecars
 │   ├── create                      # Create a sidecar
-│   │   --org-id <id>               # Organization ID (required)
-│   │   --name <name>               # Sidecar name (required)
+│   │   --org-id <id>               # Organization ID (see Org ID resolution)
+│   │   --name <name>               # Sidecar name (auto-generated if omitted)
 │   │   --image <image>             # E2B template ID or container image
 │   ├── use <id>                    # Set the active sidecar for this project
 │   ├── current                     # Show the active sidecar
@@ -127,7 +127,13 @@ chunk
 - `build-prompt --since` defaults to 3 months before the current date.
 - `task run` defaults to pipeline-as-tool mode; use `--no-pipeline-as-tool`
   to disable.
-- `config set` accepts only `model` and `apiKey` as keys.
+- `config set` user keys: `model`. Project keys (`.chunk/config.json`): `orgID`,
+  `validation.sidecarImage`. Credentials use `chunk auth set`, not `config set`.
+- **Org ID resolution** for `sidecar create`, `sidecar list`, and other sidecar
+  subcommands that need an org (in order): `--org-id` flag → `CIRCLECI_ORG_ID`
+  env var → `orgID` in `.chunk/config.json` → interactive org picker (TTY only).
+  Non-interactive sessions (agents, CI) should set `orgID` in project config or
+  pass `--org-id` / `CIRCLECI_ORG_ID`.
 - `chunk init` uses Claude to auto-detect the test command for the project.
   It generates `.claude/settings.json` with pre-commit hooks. It never touches
   CircleCI — tokens are prompted inline only when a command actually needs them.
@@ -136,6 +142,18 @@ chunk
   failing with an error.
 - `chunk auth set github` stores a GitHub token in the config file; previously
   only the `GITHUB_TOKEN` environment variable was supported.
+
+## Config keys
+
+| Key | Scope | Description |
+|-----|-------|-------------|
+| `model` | user config (`~/.config/chunk/config.json`) | Claude model override |
+| `orgID` | `.chunk/config.json` | CircleCI organization ID for sidecar subcommands |
+| `validation.sidecarImage` | `.chunk/config.json` | Snapshot or image ID for sidecar bootstrap and validate |
+
+`chunk config show` displays resolved user credentials and, when run from a
+project directory, the resolved `orgID` (env var takes precedence over project
+config).
 
 ## Flag Conventions
 

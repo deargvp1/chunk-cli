@@ -158,8 +158,17 @@ User config lives at `$XDG_CONFIG_HOME/chunk/config.json` (default: `~/.config/c
 
 ```json
 {
-  "apiKey": "sk-...",
+  "anthropicAPIKey": "sk-...",
   "model": "claude-sonnet-4-6"
+}
+```
+
+Project config lives in `.chunk/config.json` (per repository):
+
+```json
+{
+  "orgID": "f22b6566-597d-46d5-ba74-99ef5bb3d85c",
+  "commands": []
 }
 ```
 
@@ -178,6 +187,7 @@ in `config.Resolve` and makes clients testable.
 | `GITHUB_TOKEN` | github | GitHub authentication |
 | `GITHUB_API_URL` | github | GitHub API endpoint override |
 | `CIRCLE_TOKEN` / `CIRCLECI_TOKEN` | circleci | CircleCI authentication |
+| `CIRCLECI_ORG_ID` | sidecar | CircleCI organization ID (overrides `orgID` in `.chunk/config.json`) |
 | `CIRCLECI_BASE_URL` | circleci | CircleCI endpoint override |
 | `CLAUDE_PROJECT_DIR` | init | IDE-provided project directory |
 | `XDG_CONFIG_HOME` | config | User config directory (default: `~/.config`) |

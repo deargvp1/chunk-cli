@@ -70,6 +70,7 @@ Credentials are stored in `~/.config/chunk/config.json` (respects `XDG_CONFIG_HO
 | `ANTHROPIC_API_KEY` | `build-prompt`, `init` |
 | `GITHUB_TOKEN` | `build-prompt` |
 | `CIRCLE_TOKEN` | `sidecar`, `task` |
+| `CIRCLECI_ORG_ID` | `sidecar` (optional; overrides `orgID` in `.chunk/config.json`) |
 
 ---
 
@@ -169,10 +170,28 @@ The agent loads your team's prompt, diffs the changes, and returns filtered find
 
 ## Sidecar workflow (preview)
 
+### First-time sidecar setup
+
+Before creating a sidecar in a non-interactive session (AI agents, scripts), set
+your CircleCI org ID once per project:
+
+```bash
+chunk auth set circleci
+chunk config set orgID <your-org-id>
+chunk sidecar create
+```
+
+`chunk config show` displays the resolved `orgID` when set. One-off overrides:
+`chunk sidecar create --org-id <id>` or `CIRCLECI_ORG_ID=<id> chunk sidecar create`.
+See [docs/CLI.md](CLI.md) for the full resolution order (`--org-id` → env →
+project config → interactive picker).
+
+### Dev loop
+
 Sidecars let you run validations in a clean cloud environment. The typical loop:
 
 ```bash
-# One-time: create a sidecar (--name is optional; a random name is generated if omitted)
+# Create a sidecar (--name is optional; a random name is generated if omitted)
 chunk sidecar create
 chunk sidecar create --name my-sidecar
 
