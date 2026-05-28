@@ -46,9 +46,7 @@ Do **not** run `echo $CIRCLE_TOKEN`, `env`, `printenv`, or any other command tha
       > No CircleCI orgID found in `.chunk/config.json`. Sidecar cannot select an org in a non-interactive session. Please provide your CircleCI org ID. To persist it for future sessions, I will run: `chunk config set orgID <id>`
 
       After the user provides the ID, run `chunk config set orgID <id>`, then continue to Step 2.
-   4. If only `CIRCLECI_ORG_ID` is set (config still lacks `orgID`), you may pass that value as `--org-id` on sidecar commands. Persisting with `chunk config set orgID <id>` is recommended but not required before Step 2.
-
-   Record the resolved org ID for Step 2: from `.chunk/config.json` after step 3, or from `CIRCLECI_ORG_ID` per step 4.
+   4. If only `CIRCLECI_ORG_ID` is set (config still lacks `orgID`), `chunk sidecar create` will detect it automatically. Persisting with `chunk config set orgID <id>` is recommended but not required before Step 2.
 
 ## Step 2: Find or create the active sidecar
 
@@ -57,16 +55,16 @@ Run `chunk sidecar current`. Three cases:
 - **It prints a sidecar** — use it; go to Step 4.
 - **No active sidecar, and `validation.sidecarImage` is set in `.chunk/config.json`** — create a new sidecar from the snapshot, sync, and go straight to Step 4:
   ```
-  chunk sidecar create --org-id <orgID> --image <sidecarImage>
+  chunk sidecar create --image <sidecarImage>
   chunk sidecar sync
   ```
-  Read `orgID` and `validation.sidecarImage` from `.chunk/config.json` (orgID was resolved in Step 1).
-- **No active sidecar, no `sidecarImage` configured** — full environment setup is needed. Inform the user, create a sidecar with the org ID from Step 1, then go to Step 3:
+  Read `validation.sidecarImage` from `.chunk/config.json`; orgID is resolved automatically from config or `CIRCLECI_ORG_ID`.
+- **No active sidecar, no `sidecarImage` configured** — full environment setup is needed. Inform the user, then go to Step 3:
   ```
-  chunk sidecar create --org-id <orgID>
+  chunk sidecar create
   ```
 
-Always pass `--org-id` to `chunk sidecar create` and `chunk sidecar snapshot list` — use the org ID resolved in Step 1. Interactive org selection does not work in agent sessions. `--name` is optional; a random adjective-adverb-noun name (e.g. `happy-quickly-tesla`) is generated automatically if omitted.
+`chunk sidecar create` resolves orgID automatically: first from `.chunk/config.json`, then from `CIRCLECI_ORG_ID`. The Step 1 preflight guarantees one of those is set before this point. `--name` is optional; a random adjective-adverb-noun name (e.g. `happy-quickly-tesla`) is generated automatically if omitted.
 
 ## Step 3: One-time setup
 
@@ -74,11 +72,11 @@ This step produces a reusable snapshot so future sessions boot fast. Follow it w
 
 1. `chunk sidecar setup --dir .` — detects the stack, syncs files, and runs install steps on the sidecar. Pass `--name <name>` if you want a specific name; otherwise one is generated automatically.
 2. Verify the sidecar is working correctly: `chunk validate`. This uses per-command routing — commands marked `remote: true` run on the sidecar, the rest run locally. If any command fails with a missing binary or dependency, see Troubleshooting below, then re-run `chunk validate` until it passes.
-3. Snapshot the working sidecar: `chunk sidecar snapshot create --name <snapshot-name>`. This captures the configured state and returns a snapshot ID. **Always snapshot after confirming the sidecar is working — do not skip this step.** Snapshot names are limited to 255 characters; the CLI will reject longer names before making the API call. **The source sidecar is deleted after a successful snapshot** to avoid leaking the build instance, and local active-sidecar state is cleared — expect `chunk sidecar current` to return empty until you launch a new one in step 5. To look up snapshot IDs later, run `chunk sidecar snapshot list --org-id <orgID>`.
+3. Snapshot the working sidecar: `chunk sidecar snapshot create --name <snapshot-name>`. This captures the configured state and returns a snapshot ID. **Always snapshot after confirming the sidecar is working — do not skip this step.** Snapshot names are limited to 255 characters; the CLI will reject longer names before making the API call. **The source sidecar is deleted after a successful snapshot** to avoid leaking the build instance, and local active-sidecar state is cleared — expect `chunk sidecar current` to return empty until you launch a new one in step 5. To look up snapshot IDs later, run `chunk sidecar snapshot list`.
 4. Record the snapshot ID in `.chunk/config.json`: `chunk config set validation.sidecarImage <snapshot-id>`.
 5. Create a **new** sidecar from the snapshot and set it as active — this is the clean environment you will use going forward:
    ```
-   chunk sidecar create --org-id <orgID> --image <snapshot-id>
+   chunk sidecar create --image <snapshot-id>
    chunk sidecar sync
    ```
 6. Re-verify with `chunk validate` to confirm the snapshot-booted sidecar is healthy before entering the loop.
@@ -177,7 +175,7 @@ When `CLAUDE_SESSION_ID` is set, `chunk` auto-scopes the active-sidecar file to 
 - **SSH key registration or API calls time out (`context deadline exceeded`)** — the sidecar is unhealthy. If `validation.sidecarImage` is set in `.chunk/config.json`, create a fresh sidecar from the snapshot (Step 2 case 2). If not, run `chunk sidecar forget` and repeat Step 3 with a new sidecar.
 - **Missing dependency or binary not on `$PATH` on the sidecar** — the environment setup steps may not have installed everything needed, or a runtime was installed to a non-standard path. Use `chunk validate --remote --cmd "<install-or-symlink-command>"` to install the missing tool or make it accessible. Once `chunk validate` passes, re-snapshot so future sidecars include it — note this deletes the current sidecar, so launch a new one from the snapshot to keep working.
 - **`sync` errors about merge base or upstream** — the local branch has no remote upstream. Ask the user to push the branch (`git push -u origin <branch>`) or rebase onto a tracked ref.
-- **Snapshot `--image` will not boot a new sidecar** — snapshot IDs are org-scoped. Confirm the new sidecar is being created in the same org as the snapshot. Run `chunk sidecar snapshot list --org-id <id>` to verify available snapshot IDs.
+- **Snapshot `--image` will not boot a new sidecar** — snapshot IDs are org-scoped. Confirm the new sidecar is being created in the same org as the snapshot. Run `chunk sidecar snapshot list` to verify available snapshot IDs.
 
 ## Out of scope
 
