@@ -388,8 +388,7 @@ func TestInitDetectsUnknownToolchainNoClaude(t *testing.T) {
 
 	cfg := readInitConfig(t, workDir)
 	test := commandByName(cfg, "test")
-	assert.Assert(t, test != nil, "expected fallback test command")
-	assert.Equal(t, test["run"], "npm test", "expected npm test fallback for unknown toolchain")
+	assert.Assert(t, test == nil, "expected no test command for unknown toolchain without Claude")
 }
 
 // --- Hook setup (Gap 3) ---
