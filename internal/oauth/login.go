@@ -3,6 +3,7 @@ package oauth
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -114,7 +115,7 @@ func waitForEnter(ctx context.Context, status io.Writer) bool {
 	}()
 	select {
 	case err := <-errCh:
-		return err == nil || err == io.EOF
+		return err == nil || errors.Is(err, io.EOF)
 	case <-ctx.Done():
 		return false
 	}
