@@ -79,6 +79,7 @@ func DetectCommands(ctx context.Context, claude *anthropic.Client, workDir strin
 		}, nil
 
 	case has["Gemfile"]:
+		// Assumes Rake-based test task (Rails default). RSpec/Minitest-only stacks may need manual adjustment.
 		return []config.Command{
 			{Name: "test", Run: "bundle exec rake test", Role: config.RoleGate, Timeout: 300, Limit: 3},
 		}, nil
@@ -89,8 +90,12 @@ func DetectCommands(ctx context.Context, claude *anthropic.Client, workDir strin
 		}, nil
 
 	case has["build.gradle"], has["build.gradle.kts"]:
+		gradleCmd := "gradle test"
+		if has["gradlew"] {
+			gradleCmd = "./gradlew test"
+		}
 		return []config.Command{
-			{Name: "test", Run: "./gradlew test", Role: config.RoleGate, Timeout: 300, Limit: 3},
+			{Name: "test", Run: gradleCmd, Role: config.RoleGate, Timeout: 300, Limit: 3},
 		}, nil
 
 	case has["package.json"]:
