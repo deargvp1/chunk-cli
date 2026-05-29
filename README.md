@@ -41,7 +41,7 @@ chunk validate --list       # list configured commands
 
 ### Agent Onboarding for Sidecars (Preferred method)
 
-Chunk init will install skills for working with Chunk sidecars. After the init, start a claude session and run `/chunk-sidecars` and your agent will create a sidecar and configure it for use running tests and creating snapshots of good Chunk sidecars.
+Chunk init will install skills for working with Chunk sidecars. After the init, start a claude session and run `/chunk-sidecar` and your agent will create a sidecar and configure it for use running tests and creating snapshots of good Chunk sidecars.
 
 ### Manual setup
 
