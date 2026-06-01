@@ -305,7 +305,7 @@ func runValidate(ctx context.Context, client *circleci.Client, rc config.Resolve
 			streams.ErrPrintf("%s\n", ui.Success(fmt.Sprintf("Saved %s to .chunk/config.json", cmdName)))
 		}
 		if sidecarID != "" && allRemote {
-			execFn, dest, err := openSSHSession(ctx, client, sidecarID, identityFile, workdir, envVars, rc)
+			execFn, dest, err := openSSHSession(ctx, client, sidecarID, identityFile, workdir, envVars, rc, streams)
 			if err != nil {
 				return err
 			}
@@ -316,7 +316,7 @@ func runValidate(ctx context.Context, client *circleci.Client, rc config.Resolve
 
 	// All-remote execution (--remote flag): send everything to the sidecar.
 	if sidecarID != "" && allRemote {
-		execFn, dest, err := openSSHSession(ctx, client, sidecarID, identityFile, workdir, envVars, rc)
+		execFn, dest, err := openSSHSession(ctx, client, sidecarID, identityFile, workdir, envVars, rc, streams)
 		if err != nil {
 			return err
 		}
@@ -329,7 +329,7 @@ func runValidate(ctx context.Context, client *circleci.Client, rc config.Resolve
 		if name != "" {
 			if cmd := cfg.FindCommand(name); cmd != nil && cmd.Remote {
 				statusFn(iostream.LevelInfo, fmt.Sprintf("running %s on sidecar %s", name, sidecarID))
-				execFn, dest, err := openSSHSession(ctx, client, sidecarID, identityFile, workdir, envVars, rc)
+				execFn, dest, err := openSSHSession(ctx, client, sidecarID, identityFile, workdir, envVars, rc, streams)
 				if err != nil {
 					return err
 				}
@@ -417,8 +417,18 @@ func syncToSidecar(ctx context.Context, client *circleci.Client, sidecarID, iden
 
 // openSSHSession establishes an SSH session to the sidecar and returns an
 // exec function and the resolved remote working directory.
-func openSSHSession(ctx context.Context, client *circleci.Client, sidecarID, identityFile, workdir string, envVars map[string]string, rc config.ResolvedConfig) (func(context.Context, string) (string, string, int, error), string, error) {
-	authSock := os.Getenv(config.EnvSSHAuthSock)
+func openSSHSession(ctx context.Context, client *circleci.Client, sidecarID, identityFile, workdir string, envVars map[string]string, rc config.ResolvedConfig, streams iostream.Streams) (func(context.Context, string) (string, string, int, error), string, error) {
+	if identityFile == "" && rc.UseSSHIdentityFile {
+		var keyErr error
+		identityFile, keyErr = sidecar.DefaultKeyPath()
+		if keyErr != nil {
+			streams.ErrPrintf("warning: could not resolve SSH identity file: %v\n", keyErr)
+		}
+	}
+	var authSock string
+	if identityFile == "" {
+		authSock = os.Getenv(config.EnvSSHAuthSock)
+	}
 	session, err := sidecar.OpenSession(ctx, client, sidecarID, identityFile, authSock)
 	if err != nil {
 		return nil, "", &userError{msg: "Could not open SSH session to sidecar.", err: err}
@@ -471,7 +481,7 @@ func runSplitCommands(ctx context.Context, client *circleci.Client, sidecarID st
 	}
 	var runErr error
 	if len(remoteCfg.Commands) > 0 {
-		execFn, dest, err := openSSHSession(ctx, client, sidecarID, identityFile, workdir, envVars, rc)
+		execFn, dest, err := openSSHSession(ctx, client, sidecarID, identityFile, workdir, envVars, rc, streams)
 		if err != nil {
 			if freshlyCreated {
 				return newUserError(fmt.Sprintf("Could not reach newly created sidecar %s.", sidecarID)).
