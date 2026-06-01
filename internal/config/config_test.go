@@ -342,6 +342,7 @@ func TestResolve_ModelFromConfig(t *testing.T) {
 
 func TestValidConfigKeys(t *testing.T) {
 	assert.Assert(t, ValidConfigKeys["model"])
+	assert.Assert(t, ValidConfigKeys["useSSHIdentityFile"])
 	assert.Assert(t, !ValidConfigKeys["anthropicAPIKey"])
 	assert.Assert(t, !ValidConfigKeys["badkey"])
 }
