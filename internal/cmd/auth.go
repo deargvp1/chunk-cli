@@ -12,6 +12,7 @@ import (
 	"github.com/CircleCI-Public/chunk-cli/internal/config"
 	"github.com/CircleCI-Public/chunk-cli/internal/iostream"
 	"github.com/CircleCI-Public/chunk-cli/internal/keyring"
+	"github.com/CircleCI-Public/chunk-cli/internal/oauth"
 	"github.com/CircleCI-Public/chunk-cli/internal/tui"
 	"github.com/CircleCI-Public/chunk-cli/internal/ui"
 )
@@ -29,10 +30,51 @@ func newAuthCmd() *cobra.Command {
 		RunE:               groupRunE,
 		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
 	}
+	cmd.AddCommand(newAuthLoginCmd())
 	cmd.AddCommand(newAuthSetCmd())
 	cmd.AddCommand(newAuthStatusCmd())
 	cmd.AddCommand(newAuthRemoveCmd())
 	return cmd
+}
+
+func newAuthLoginCmd() *cobra.Command {
+	var noBrowser bool
+	var signup bool
+	cmd := &cobra.Command{
+		Use:   "login",
+		Short: "Log in to CircleCI via browser (recommended)",
+		Long:  "Authenticate with CircleCI using OAuth. Opens your browser for a secure login flow.",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			insecureStorage, _ := cmd.Flags().GetBool("insecure-storage")
+			rc, _ := config.Resolve("", "", insecureStorage)
+			io := iostream.FromCmd(cmd)
+			return authLogin(cmd.Context(), io, rc.CircleCIBaseURL, noBrowser, signup, insecureStorage)
+		},
+	}
+	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "Print the login URL instead of opening a browser")
+	cmd.Flags().BoolVar(&signup, "signup", false, "Route to the signup page instead of login")
+	return cmd
+}
+
+func authLogin(ctx context.Context, streams iostream.Streams, baseURL string, noBrowser, signup, insecureStorage bool) error {
+	streams.Println("")
+	streams.Println(ui.Bold("Chunk CLI - CircleCI Login"))
+	streams.Println("")
+
+	token, err := oauth.Login(ctx, oauth.LoginConfig{
+		BaseURL:   baseURL,
+		NoBrowser: noBrowser,
+		Signup:    signup,
+	}, streams.Err)
+	if err != nil {
+		return &userError{
+			msg:        "Login failed.",
+			suggestion: "Try again or use `chunk auth set circleci` to set a token manually.",
+			err:        fmt.Errorf("oauth login: %w", err),
+		}
+	}
+
+	return saveCircleCIToken(ctx, token, streams, baseURL, insecureStorage)
 }
 
 func newAuthSetCmd() *cobra.Command {

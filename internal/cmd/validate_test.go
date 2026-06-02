@@ -59,7 +59,7 @@ func TestValidateHookExitsOneWhenCircleCITokenMissingAndRemoteCommands(t *testin
 	assert.Equal(t, ec.ExitCode(), 1)
 	assert.Assert(t, strings.Contains(stderr, "CircleCI auth is not configured"),
 		"expected auth message in stderr, got: %q", stderr)
-	assert.Assert(t, strings.Contains(stderr, "chunk auth set circleci"),
+	assert.Assert(t, strings.Contains(stderr, "chunk auth login"),
 		"expected auth hint in stderr, got: %q", stderr)
 }
 

@@ -16,12 +16,13 @@ import (
 	"github.com/CircleCI-Public/chunk-cli/internal/github"
 	hc "github.com/CircleCI-Public/chunk-cli/internal/httpcl"
 	"github.com/CircleCI-Public/chunk-cli/internal/iostream"
+	"github.com/CircleCI-Public/chunk-cli/internal/oauth"
 	"github.com/CircleCI-Public/chunk-cli/internal/tui"
 	"github.com/CircleCI-Public/chunk-cli/internal/ui"
 )
 
 const (
-	suggestionCircleCIAuth  = "Set " + config.EnvCircleToken + " or run 'chunk auth set circleci'."
+	suggestionCircleCIAuth  = "Set " + config.EnvCircleToken + " or run 'chunk auth login'."
 	suggestionAnthropicAuth = "Set " + config.EnvAnthropicAPIKey + " or run 'chunk auth set anthropic'."
 	suggestionGitHubAuth    = "Set " + config.EnvGitHubToken + " or run 'chunk auth set github'."
 )
@@ -64,30 +65,56 @@ func ensureCircleCIClient(ctx context.Context, cmd *cobra.Command, rc config.Res
 	}
 
 	streams.ErrPrintln("")
-	streams.ErrPrintln(ui.Bold("CircleCI token required"))
-	streams.ErrPrintln("Create a token at https://app.circleci.com/settings/user/tokens")
-	streams.ErrPrintln("Don't have an account? Sign up at https://app.circleci.com/signup")
+	streams.ErrPrintln(ui.Bold("CircleCI authentication required"))
 	printSaveHint(streams, "Token", insecureStorage)
 	streams.ErrPrintln("")
 
-	token, err := prompter("CircleCI Token")
-	if err != nil {
-		if errors.Is(err, tui.ErrNoTTY) {
+	choice, selectErr := tui.SelectFromList("How would you like to authenticate?", []string{
+		"Log in via browser (recommended)",
+		"Enter a token manually",
+	})
+	if selectErr != nil {
+		if errors.Is(selectErr, tui.ErrNoTTY) {
 			return nil, newUserError("CircleCI token required.").
 				withCode("auth.circleci_token_required").
 				withSuggestion(suggestionCircleCIAuth).
 				withExitCode(ExitAuthError).
-				wrap(err)
+				wrap(selectErr)
 		}
-		return nil, err
+		return nil, selectErr
 	}
-	token = strings.TrimSpace(token)
-	if token == "" {
-		return nil, newUserError("CircleCI token required.").
-			withCode("auth.circleci_token_required").
-			withSuggestion(suggestionCircleCIAuth).
-			withExitCode(ExitAuthError).
-			wrapMsg("empty token entered")
+
+	var token string
+	switch choice {
+	case 0:
+		token, err = oauth.Login(ctx, oauth.LoginConfig{
+			BaseURL: rc.CircleCIBaseURL,
+		}, streams.Err)
+		if err != nil {
+			return nil, fmt.Errorf("oauth login: %w", err)
+		}
+	case 1:
+		streams.ErrPrintln("Create a token at https://app.circleci.com/settings/user/tokens")
+		streams.ErrPrintln("")
+		token, err = prompter("CircleCI Token")
+		if err != nil {
+			if errors.Is(err, tui.ErrNoTTY) {
+				return nil, newUserError("CircleCI token required.").
+					withCode("auth.circleci_token_required").
+					withSuggestion(suggestionCircleCIAuth).
+					withExitCode(ExitAuthError).
+					wrap(err)
+			}
+			return nil, err
+		}
+		token = strings.TrimSpace(token)
+		if token == "" {
+			return nil, newUserError("CircleCI token required.").
+				withCode("auth.circleci_token_required").
+				withSuggestion(suggestionCircleCIAuth).
+				withExitCode(ExitAuthError).
+				wrapMsg("empty token entered")
+		}
 	}
 
 	streams.ErrPrintln(ui.Dim("Validating CircleCI token..."))
