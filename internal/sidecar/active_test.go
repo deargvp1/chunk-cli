@@ -223,7 +223,8 @@ func TestResolveWorkspaceCLIFlagWins(t *testing.T) {
 	ctx := context.Background()
 	assert.NilError(t, SaveActive(ctx, ActiveSidecar{SidecarID: "sb-1", Workspace: "/workspace/saved"}))
 
-	got := ResolveWorkspace(ctx, "/workspace/override", "myrepo")
+	got, err := ResolveWorkspace(ctx, "/workspace/override", "myrepo")
+	assert.NilError(t, err)
 	assert.Equal(t, got, "/workspace/override")
 }
 
@@ -235,7 +236,8 @@ func TestResolveWorkspaceSidecarFallback(t *testing.T) {
 	ctx := context.Background()
 	assert.NilError(t, SaveActive(ctx, ActiveSidecar{SidecarID: "sb-1", Workspace: "/workspace/saved"}))
 
-	got := ResolveWorkspace(ctx, "", "myrepo")
+	got, err := ResolveWorkspace(ctx, "", "myrepo")
+	assert.NilError(t, err)
 	assert.Equal(t, got, "/workspace/saved")
 }
 
@@ -244,8 +246,30 @@ func TestResolveWorkspaceDefaultFallback(t *testing.T) {
 	t.Chdir(dir)
 	setupXDGData(t)
 
-	got := ResolveWorkspace(context.Background(), "", "myrepo")
-	assert.Equal(t, got, "./workspace/myrepo")
+	got, err := ResolveWorkspace(context.Background(), "", "myrepo")
+	assert.NilError(t, err)
+	assert.Equal(t, got, "/home/user/myrepo")
+}
+
+func TestResolveWorkspaceEmptyRepoErrors(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	setupXDGData(t)
+
+	_, err := ResolveWorkspace(context.Background(), "", "")
+	assert.ErrorContains(t, err, "repo name is empty")
+}
+
+func TestResolveWorkspaceSidecarHomeEnvVar(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	setupXDGData(t)
+
+	t.Setenv("CHUNK_SIDECAR_HOME", "/home/runner")
+
+	got, err := ResolveWorkspace(context.Background(), "", "myrepo")
+	assert.NilError(t, err)
+	assert.Equal(t, got, "/home/runner/myrepo")
 }
 
 func TestSidecarFileNameCases(t *testing.T) {
