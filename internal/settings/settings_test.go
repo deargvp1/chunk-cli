@@ -52,3 +52,106 @@ func TestBuildHookTimeoutRespectsExplicitValue(t *testing.T) {
 	timeout, _ := entry["timeout"].(float64)
 	assert.Assert(t, timeout == 120, "expected explicit timeout of 120, got: %v", timeout)
 }
+
+func TestBuildCodexNoMetadata(t *testing.T) {
+	cmds := []config.Command{
+		{Name: "test", Run: "go test ./...", Timeout: 60},
+	}
+	data, err := BuildCodex(cmds)
+	assert.NilError(t, err)
+
+	var s map[string]interface{}
+	assert.NilError(t, json.Unmarshal(data, &s))
+
+	// Must not contain Claude Code-specific keys.
+	_, hasSchema := s["$schema"]
+	assert.Assert(t, !hasSchema, "BuildCodex must not include $schema")
+	_, hasComment := s["_comment"]
+	assert.Assert(t, !hasComment, "BuildCodex must not include _comment")
+	_, hasPerms := s["permissions"]
+	assert.Assert(t, !hasPerms, "BuildCodex must not include permissions")
+}
+
+func TestBuildCodexCommandNotWrappedWithCd(t *testing.T) {
+	cmds := []config.Command{
+		{Name: "test", Run: "go test ./...", Timeout: 60},
+	}
+	data, err := BuildCodex(cmds)
+	assert.NilError(t, err)
+
+	var s map[string]interface{}
+	assert.NilError(t, json.Unmarshal(data, &s))
+
+	hooks, ok := s["hooks"].(map[string]interface{})
+	assert.Assert(t, ok, "expected hooks map")
+	preToolUse, ok := hooks["PreToolUse"].([]interface{})
+	assert.Assert(t, ok && len(preToolUse) > 0, "expected PreToolUse array")
+	group, ok := preToolUse[0].(map[string]interface{})
+	assert.Assert(t, ok, "expected hook group to be a map")
+	entries, ok := group["hooks"].([]interface{})
+	assert.Assert(t, ok && len(entries) > 0, "expected hook entries")
+	entry, ok := entries[0].(map[string]interface{})
+	assert.Assert(t, ok, "expected hook entry to be a map")
+
+	cmd, _ := entry["command"].(string)
+	assert.Equal(t, cmd, "go test ./...", "Codex hook command must be the raw command without a cd prefix")
+}
+
+func TestBuildCodexTimeoutDefaultsToSixty(t *testing.T) {
+	cmds := []config.Command{
+		{Name: "test", Run: "go test ./...", Timeout: 0},
+	}
+	data, err := BuildCodex(cmds)
+	assert.NilError(t, err)
+
+	var s map[string]interface{}
+	assert.NilError(t, json.Unmarshal(data, &s))
+
+	hooks, ok := s["hooks"].(map[string]interface{})
+	assert.Assert(t, ok, "expected hooks map")
+	preToolUse, ok := hooks["PreToolUse"].([]interface{})
+	assert.Assert(t, ok && len(preToolUse) > 0, "expected PreToolUse array")
+	group, ok := preToolUse[0].(map[string]interface{})
+	assert.Assert(t, ok, "expected hook group to be a map")
+	entries, ok := group["hooks"].([]interface{})
+	assert.Assert(t, ok && len(entries) > 0, "expected hook entries")
+	entry, ok := entries[0].(map[string]interface{})
+	assert.Assert(t, ok, "expected hook entry to be a map")
+
+	timeout, _ := entry["timeout"].(float64)
+	assert.Assert(t, timeout == 60, "expected default hook timeout of 60, got: %v", timeout)
+}
+
+func TestBuildCodexIncludesStopHook(t *testing.T) {
+	cmds := []config.Command{
+		{Name: "test", Run: "go test ./...", Timeout: 60},
+	}
+	data, err := BuildCodex(cmds)
+	assert.NilError(t, err)
+
+	var s map[string]interface{}
+	assert.NilError(t, json.Unmarshal(data, &s))
+
+	hooks := s["hooks"].(map[string]interface{})
+	stop, ok := hooks["Stop"].([]interface{})
+	assert.Assert(t, ok && len(stop) > 0, "BuildCodex must include a Stop hook")
+
+	group, ok := stop[0].(map[string]interface{})
+	assert.Assert(t, ok, "expected stop group to be a map")
+	entries, ok := group["hooks"].([]interface{})
+	assert.Assert(t, ok && len(entries) > 0, "expected stop hook entries")
+	entry, ok := entries[0].(map[string]interface{})
+	assert.Assert(t, ok, "expected stop hook entry to be a map")
+	assert.Equal(t, entry["command"], "chunk validate")
+}
+
+func TestBuildCodexNoCommandsProducesEmptyHooks(t *testing.T) {
+	data, err := BuildCodex(nil)
+	assert.NilError(t, err)
+
+	var s map[string]interface{}
+	assert.NilError(t, json.Unmarshal(data, &s))
+
+	_, hasHooks := s["hooks"]
+	assert.Assert(t, !hasHooks, "BuildCodex with no commands must produce empty hooks")
+}

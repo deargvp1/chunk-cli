@@ -171,6 +171,107 @@ func TestWriteSettingsAlreadyUpToDate(t *testing.T) {
 	assert.Assert(t, bytes.Contains(errOut.Bytes(), []byte("already up to date")))
 }
 
+func TestWriteCodexHooksNewFile(t *testing.T) {
+	dir := t.TempDir()
+	streams, _, errOut := testStreams()
+
+	commands := []config.Command{
+		{Name: "test", Run: "go test ./...", Timeout: 60},
+	}
+
+	err := writeCodexHooks(dir, commands, streams, fakeConfirmYes)
+	assert.NilError(t, err)
+
+	data, err := os.ReadFile(filepath.Join(dir, ".codex", "hooks.json"))
+	assert.NilError(t, err)
+
+	var parsed map[string]interface{}
+	assert.NilError(t, json.Unmarshal(data, &parsed))
+	// Must not contain Claude Code-specific keys.
+	assert.Assert(t, parsed["$schema"] == nil)
+	assert.Assert(t, parsed["permissions"] == nil)
+	assert.Assert(t, parsed["hooks"] != nil)
+	assert.Assert(t, errOut.Len() > 0)
+}
+
+func TestWriteCodexHooksExistingMergeApplied(t *testing.T) {
+	dir := t.TempDir()
+	codexDir := filepath.Join(dir, ".codex")
+	assert.NilError(t, os.MkdirAll(codexDir, 0o755))
+
+	existing := []byte(`{
+  "hooks": {
+    "PostToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "audit", "timeout": 10}]}]
+  }
+}`)
+	assert.NilError(t, os.WriteFile(filepath.Join(codexDir, "hooks.json"), existing, 0o644))
+
+	streams, _, errOut := testStreams()
+	commands := []config.Command{
+		{Name: "test", Run: "go test ./...", Timeout: 60},
+	}
+
+	err := writeCodexHooks(dir, commands, streams, fakeConfirmYes)
+	assert.NilError(t, err)
+
+	data, err := os.ReadFile(filepath.Join(codexDir, "hooks.json"))
+	assert.NilError(t, err)
+
+	var merged map[string]interface{}
+	assert.NilError(t, json.Unmarshal(data, &merged))
+
+	hooks := merged["hooks"].(map[string]interface{})
+	// Existing PostToolUse preserved.
+	assert.Assert(t, hooks["PostToolUse"] != nil)
+	// New PreToolUse and Stop hooks added.
+	assert.Assert(t, hooks["PreToolUse"] != nil)
+	assert.Assert(t, hooks["Stop"] != nil)
+
+	assert.Assert(t, bytes.Contains(errOut.Bytes(), []byte("Updated")))
+}
+
+func TestWriteCodexHooksExistingMergeDeclined(t *testing.T) {
+	dir := t.TempDir()
+	codexDir := filepath.Join(dir, ".codex")
+	assert.NilError(t, os.MkdirAll(codexDir, 0o755))
+
+	existing := []byte(`{"hooks": {}}`)
+	assert.NilError(t, os.WriteFile(filepath.Join(codexDir, "hooks.json"), existing, 0o644))
+
+	streams, _, errOut := testStreams()
+	commands := []config.Command{
+		{Name: "test", Run: "go test ./...", Timeout: 60},
+	}
+
+	err := writeCodexHooks(dir, commands, streams, fakeConfirmNo)
+	assert.NilError(t, err)
+
+	// Original hooks.json untouched.
+	data, err := os.ReadFile(filepath.Join(codexDir, "hooks.json"))
+	assert.NilError(t, err)
+	assert.Equal(t, string(data), string(existing))
+
+	// Example file written.
+	_, statErr := os.Stat(filepath.Join(codexDir, "hooks.example.json"))
+	assert.NilError(t, statErr)
+
+	assert.Assert(t, bytes.Contains(errOut.Bytes(), []byte("hooks.example.json")))
+}
+
+func TestWriteCodexHooksAlreadyUpToDate(t *testing.T) {
+	dir := t.TempDir()
+	commands := []config.Command{
+		{Name: "test", Run: "go test ./...", Timeout: 60},
+	}
+
+	streams1, _, _ := testStreams()
+	assert.NilError(t, writeCodexHooks(dir, commands, streams1, fakeConfirmYes))
+
+	streams2, _, errOut := testStreams()
+	assert.NilError(t, writeCodexHooks(dir, commands, streams2, fakeConfirmYes))
+	assert.Assert(t, bytes.Contains(errOut.Bytes(), []byte("already up to date")))
+}
+
 func setupShellEnv(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()

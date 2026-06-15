@@ -127,6 +127,106 @@ func writeSettings(workDir string, commands []config.Command, streams iostream.S
 	return nil
 }
 
+// writeCodexHooks writes .codex/hooks.json for the project.
+// Uses the same merge/confirm/fallback pattern as writeSettings.
+func writeCodexHooks(workDir string, commands []config.Command, streams iostream.Streams, confirm confirmFunc) error {
+	generated, err := settings.BuildCodex(commands)
+	if err != nil {
+		return &userError{msg: "Could not build .codex/hooks.json.", err: fmt.Errorf("build codex hooks: %w", err)}
+	}
+
+	dir := filepath.Join(workDir, ".codex")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return &userError{
+			msg:        "Could not create .codex directory.",
+			suggestion: suggestionCheckPerms,
+			err:        fmt.Errorf("create .codex dir: %w", err),
+		}
+	}
+
+	path := filepath.Join(dir, "hooks.json")
+	existing, readErr := os.ReadFile(path)
+	if readErr != nil {
+		if !errors.Is(readErr, fs.ErrNotExist) {
+			return &userError{
+				msg:        "Could not read .codex/hooks.json.",
+				suggestion: suggestionCheckPerms,
+				err:        fmt.Errorf("read existing hooks.json: %w", readErr),
+			}
+		}
+		if err := os.WriteFile(path, withTrailingNewline(generated), 0o644); err != nil {
+			return &userError{
+				msg:        "Could not write .codex/hooks.json.",
+				suggestion: suggestionCheckPerms,
+				err:        fmt.Errorf("write hooks.json: %w", err),
+			}
+		}
+		streams.ErrPrintln(ui.Success("Wrote .codex/hooks.json"))
+		return nil
+	}
+
+	result, err := settings.MergeCodex(existing, generated)
+	if err != nil {
+		return &userError{msg: "Could not merge .codex/hooks.json.", err: fmt.Errorf("merge codex hooks: %w", err)}
+	}
+
+	if !result.Changed {
+		streams.ErrPrintln(ui.Success("Codex hooks already up to date"))
+		return nil
+	}
+
+	diff := settings.Diff(result.Original, result.Merged)
+	streams.ErrPrintln("")
+	streams.ErrPrintln(ui.Bold("Changes to .codex/hooks.json:"))
+	streams.ErrPrintln("")
+	for _, line := range strings.Split(diff, "\n") {
+		switch {
+		case strings.HasPrefix(line, "---"), strings.HasPrefix(line, "+++"):
+			streams.ErrPrintln(ui.Bold(line))
+		case strings.HasPrefix(line, "@@"):
+			streams.ErrPrintln(ui.Cyan(line))
+		case strings.HasPrefix(line, "+"):
+			streams.ErrPrintln(ui.Green(line))
+		case strings.HasPrefix(line, "-"):
+			streams.ErrPrintln(ui.Red(line))
+		default:
+			streams.ErrPrintln(line)
+		}
+	}
+
+	apply, confirmErr := confirm("Apply changes to .codex/hooks.json?", false)
+	if confirmErr != nil {
+		streams.ErrPrintf("%s\n", ui.Warning(fmt.Sprintf("Could not confirm: %v", confirmErr)))
+	}
+	if confirmErr != nil || !apply {
+		return writeCodexHooksExample(dir, generated, streams)
+	}
+
+	if err := os.WriteFile(path, withTrailingNewline(result.Merged), 0o644); err != nil {
+		return &userError{
+			msg:        "Could not write .codex/hooks.json.",
+			suggestion: suggestionCheckPerms,
+			err:        fmt.Errorf("write hooks.json: %w", err),
+		}
+	}
+	streams.ErrPrintln(ui.Success("Updated .codex/hooks.json"))
+	return nil
+}
+
+// writeCodexHooksExample writes hooks.example.json as a fallback when the user
+// declines to apply changes or when there is no TTY.
+func writeCodexHooksExample(dir string, data []byte, streams iostream.Streams) error {
+	exPath := filepath.Join(dir, "hooks.example.json")
+	if err := os.WriteFile(exPath, withTrailingNewline(data), 0o644); err != nil {
+		return &userError{
+			msg: "Could not write .codex/hooks.example.json.",
+			err: fmt.Errorf("write hooks.example.json: %w", err),
+		}
+	}
+	streams.ErrPrintln(ui.Success("Wrote .codex/hooks.example.json (existing hooks.json preserved)"))
+	return nil
+}
+
 // writeSettingsExample writes settings.example.json as a fallback.
 func writeSettingsExample(dir string, data []byte, streams iostream.Streams) error {
 	exPath := filepath.Join(dir, "settings.example.json")
@@ -345,9 +445,13 @@ hook config files.`,
 				streams.ErrPrintf("%s\n", ui.Warning(fmt.Sprintf("Could not update .gitignore: %v", err)))
 			}
 
-			// Step 3: Write .claude/settings.json
+			// Step 3: Write hook config files for supported agents.
+			// Cursor reads .claude/settings.json natively — no extra file needed.
 			if !skipHooks {
 				if err := writeSettings(workDir, cfg.Commands, streams, tui.Confirm); err != nil {
+					return err
+				}
+				if err := writeCodexHooks(workDir, cfg.Commands, streams, tui.Confirm); err != nil {
 					return err
 				}
 			}

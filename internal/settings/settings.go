@@ -29,6 +29,11 @@ type settingsJSON struct {
 	Hooks       map[string][]hookGroup `json:"hooks,omitempty"`
 }
 
+// codexHooksJSON is the .codex/hooks.json structure — hooks only, no metadata or permissions.
+type codexHooksJSON struct {
+	Hooks map[string][]hookGroup `json:"hooks,omitempty"`
+}
+
 // Build generates .claude/settings.json content from commands.
 // It creates:
 //   - A PreToolUse hook matching "Bash(git commit*)" that runs each command before commits.
@@ -79,6 +84,64 @@ func Build(commands []config.Command) ([]byte, error) {
 				},
 			},
 			// Stop hook: runs validation at session end.
+			"Stop": {
+				{
+					Hooks: []hookEntry{
+						{
+							Type:    "command",
+							Command: "chunk validate",
+							Timeout: stopTimeout,
+						},
+					},
+				},
+			},
+		}
+	}
+
+	return json.MarshalIndent(s, "", "  ")
+}
+
+// BuildCodex generates .codex/hooks.json content from commands.
+// Produces the same hook structure as Build but without Claude Code-specific
+// metadata ($schema, _comment) and without a permissions block. Commands run
+// as-is; Codex sets CWD to the project root before invoking hooks.
+func BuildCodex(commands []config.Command) ([]byte, error) {
+	hooks := make([]hookEntry, 0, len(commands))
+	for _, cmd := range commands {
+		timeout := cmd.Timeout
+		if timeout == 0 {
+			timeout = 60
+		}
+		hooks = append(hooks, hookEntry{
+			Type:    "command",
+			Command: cmd.Run,
+			Timeout: timeout,
+		})
+	}
+
+	s := codexHooksJSON{}
+
+	if len(hooks) > 0 {
+		const maxStopTimeout = 600
+		stopTimeout := 30
+		for _, cmd := range commands {
+			t := cmd.Timeout
+			if t == 0 {
+				t = 300
+			}
+			stopTimeout += t
+		}
+		if stopTimeout > maxStopTimeout {
+			stopTimeout = maxStopTimeout
+		}
+
+		s.Hooks = map[string][]hookGroup{
+			"PreToolUse": {
+				{
+					Matcher: CommitMatcher,
+					Hooks:   hooks,
+				},
+			},
 			"Stop": {
 				{
 					Hooks: []hookEntry{

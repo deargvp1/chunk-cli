@@ -283,3 +283,170 @@ func TestMergeMalformedGenerated(t *testing.T) {
 	_, err := Merge([]byte(`{}`), []byte(`not json`))
 	assert.ErrorContains(t, err, "parse generated settings")
 }
+
+func TestMergeCodexMinimalExisting(t *testing.T) {
+	existing := []byte(`{}`)
+	generated := []byte(`{
+		"hooks": {
+			"PreToolUse": [{"matcher": "Bash(git commit*)", "hooks": [{"type": "command", "command": "go test ./...", "timeout": 60}]}],
+			"Stop": [{"hooks": [{"type": "command", "command": "chunk validate", "timeout": 90}]}]
+		}
+	}`)
+
+	result, err := MergeCodex(existing, generated)
+	assert.NilError(t, err)
+	assert.Assert(t, result.Changed)
+
+	var merged map[string]interface{}
+	assert.NilError(t, json.Unmarshal(result.Merged, &merged))
+
+	hooks := merged["hooks"].(map[string]interface{})
+	assert.Assert(t, hooks["PreToolUse"] != nil)
+	assert.Assert(t, hooks["Stop"] != nil)
+}
+
+func TestMergeCodexPreservesOtherHookTypes(t *testing.T) {
+	existing := []byte(`{
+		"hooks": {
+			"PostToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "audit", "timeout": 10}]}]
+		}
+	}`)
+	generated := []byte(`{
+		"hooks": {
+			"PreToolUse": [{"matcher": "Bash(git commit*)", "hooks": [{"type": "command", "command": "test", "timeout": 60}]}],
+			"Stop": [{"hooks": [{"type": "command", "command": "chunk validate", "timeout": 90}]}]
+		}
+	}`)
+
+	result, err := MergeCodex(existing, generated)
+	assert.NilError(t, err)
+
+	var merged map[string]interface{}
+	assert.NilError(t, json.Unmarshal(result.Merged, &merged))
+
+	hooks := merged["hooks"].(map[string]interface{})
+	assert.Assert(t, hooks["PostToolUse"] != nil, "PostToolUse must be preserved")
+	assert.Assert(t, hooks["PreToolUse"] != nil)
+	assert.Assert(t, hooks["Stop"] != nil)
+}
+
+func TestMergeCodexReplacesPreToolUseByMatcher(t *testing.T) {
+	existing := []byte(`{
+		"hooks": {
+			"PreToolUse": [{"matcher": "Bash(git commit*)", "hooks": [{"type": "command", "command": "old-cmd", "timeout": 30}]}]
+		}
+	}`)
+	generated := []byte(`{
+		"hooks": {
+			"PreToolUse": [{"matcher": "Bash(git commit*)", "hooks": [{"type": "command", "command": "new-cmd", "timeout": 60}]}]
+		}
+	}`)
+
+	result, err := MergeCodex(existing, generated)
+	assert.NilError(t, err)
+	assert.Assert(t, result.Changed)
+
+	var merged map[string]interface{}
+	assert.NilError(t, json.Unmarshal(result.Merged, &merged))
+
+	hooks := merged["hooks"].(map[string]interface{})
+	preToolUse := hooks["PreToolUse"].([]interface{})
+	assert.Equal(t, len(preToolUse), 1)
+
+	group := preToolUse[0].(map[string]interface{})
+	entries := group["hooks"].([]interface{})
+	entry := entries[0].(map[string]interface{})
+	assert.Equal(t, entry["command"], "new-cmd")
+}
+
+func TestMergeCodexReplacesStopHook(t *testing.T) {
+	existing := []byte(`{
+		"hooks": {
+			"Stop": [{"hooks": [{"type": "command", "command": "chunk validate", "timeout": 30}]}]
+		}
+	}`)
+	generated := []byte(`{
+		"hooks": {
+			"Stop": [{"hooks": [{"type": "command", "command": "chunk validate", "timeout": 600}]}]
+		}
+	}`)
+
+	result, err := MergeCodex(existing, generated)
+	assert.NilError(t, err)
+	assert.Assert(t, result.Changed)
+
+	var merged map[string]interface{}
+	assert.NilError(t, json.Unmarshal(result.Merged, &merged))
+
+	hooks := merged["hooks"].(map[string]interface{})
+	stop := hooks["Stop"].([]interface{})
+	group := stop[0].(map[string]interface{})
+	entries := group["hooks"].([]interface{})
+	entry := entries[0].(map[string]interface{})
+	timeout, _ := entry["timeout"].(float64)
+	assert.Assert(t, timeout == 600, "expected updated stop timeout of 600, got: %v", timeout)
+}
+
+func TestMergeCodexPreservesUserStopHooks(t *testing.T) {
+	existing := []byte(`{
+		"hooks": {
+			"Stop": [
+				{"hooks": [{"type": "command", "command": "chunk validate", "timeout": 30}]},
+				{"hooks": [{"type": "command", "command": "notify-team", "timeout": 10}]}
+			]
+		}
+	}`)
+	generated := []byte(`{
+		"hooks": {
+			"Stop": [{"hooks": [{"type": "command", "command": "chunk validate", "timeout": 600}]}]
+		}
+	}`)
+
+	result, err := MergeCodex(existing, generated)
+	assert.NilError(t, err)
+	assert.Assert(t, result.Changed)
+
+	var merged map[string]interface{}
+	assert.NilError(t, json.Unmarshal(result.Merged, &merged))
+
+	hooks := merged["hooks"].(map[string]interface{})
+	stop, ok := hooks["Stop"].([]interface{})
+	assert.Assert(t, ok && len(stop) == 2, "expected both Stop groups to be present, got: %v", len(stop))
+
+	// Find the chunk-managed group and verify it was updated.
+	for _, g := range stop {
+		group, ok := g.(map[string]interface{})
+		assert.Assert(t, ok, "expected stop group to be a map")
+		entries, ok := group["hooks"].([]interface{})
+		assert.Assert(t, ok && len(entries) > 0, "expected stop hook entries")
+		entry, ok := entries[0].(map[string]interface{})
+		assert.Assert(t, ok, "expected stop hook entry to be a map")
+		if entry["command"] == "chunk validate" {
+			timeout, _ := entry["timeout"].(float64)
+			assert.Assert(t, timeout == 600, "expected updated chunk validate timeout, got: %v", timeout)
+		}
+	}
+}
+
+func TestMergeCodexNoChangeWhenAlreadyMerged(t *testing.T) {
+	data := []byte(`{
+		"hooks": {
+			"PreToolUse": [{"matcher": "Bash(git commit*)", "hooks": [{"type": "command", "command": "go test ./...", "timeout": 60}]}],
+			"Stop": [{"hooks": [{"type": "command", "command": "chunk validate", "timeout": 90}]}]
+		}
+	}`)
+
+	result, err := MergeCodex(data, data)
+	assert.NilError(t, err)
+	assert.Assert(t, !result.Changed)
+}
+
+func TestMergeCodexMalformedExisting(t *testing.T) {
+	_, err := MergeCodex([]byte(`not json`), []byte(`{}`))
+	assert.ErrorContains(t, err, "parse existing hooks")
+}
+
+func TestMergeCodexMalformedGenerated(t *testing.T) {
+	_, err := MergeCodex([]byte(`{}`), []byte(`not json`))
+	assert.ErrorContains(t, err, "parse generated hooks")
+}
