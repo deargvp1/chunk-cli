@@ -1,5 +1,13 @@
 package fixtures
 
+import "time"
+
+// recentDate returns an RFC3339 timestamp offset from the current time,
+// keeping fixture dates within the default 3-month --since window.
+func recentDate(daysAgo int) string {
+	return time.Now().AddDate(0, 0, -daysAgo).UTC().Format(time.RFC3339)
+}
+
 // OrgValidationResponse returns a successful org validation response.
 func OrgValidationResponse(org string) string {
 	return `{
@@ -41,7 +49,12 @@ func OrgReposResponse(repoNames ...string) string {
 }
 
 // ReviewActivityResponse returns a response with one PR containing review comments.
+// Dates are generated relative to now so they always fall within the default 3-month --since window.
 func ReviewActivityResponse() string {
+	d0 := recentDate(30)
+	d1 := recentDate(29)
+	d2 := recentDate(28)
+	d3 := recentDate(27)
 	return `{
 		"data": {
 			"repository": {
@@ -52,12 +65,12 @@ func ReviewActivityResponse() string {
 						"title": "Add feature X",
 						"url": "https://github.com/test-org/test-repo/pull/42",
 						"state": "MERGED",
-						"updatedAt": "2026-03-01T00:00:00Z",
+						"updatedAt": "` + d0 + `",
 						"author": {"login": "pr-author"},
 						"reviews": {
 							"nodes": [
-								{"author": {"login": "reviewer-alice"}, "state": "APPROVED", "createdAt": "2026-03-01T01:00:00Z"},
-								{"author": {"login": "reviewer-bob"}, "state": "CHANGES_REQUESTED", "createdAt": "2026-03-01T02:00:00Z"}
+								{"author": {"login": "reviewer-alice"}, "state": "APPROVED", "createdAt": "` + d1 + `"},
+								{"author": {"login": "reviewer-bob"}, "state": "CHANGES_REQUESTED", "createdAt": "` + d2 + `"}
 							]
 						},
 						"reviewThreads": {
@@ -69,7 +82,7 @@ func ReviewActivityResponse() string {
 												"author": {"login": "reviewer-alice"},
 												"body": "Consider using early return here to reduce nesting",
 												"diffHunk": "@@ -1,3 +1,5 @@\n func foo() {\n+  if err != nil {\n+    return err\n+  }",
-												"createdAt": "2026-03-01T01:00:00Z"
+												"createdAt": "` + d1 + `"
 											}
 										]
 									}
@@ -81,7 +94,7 @@ func ReviewActivityResponse() string {
 												"author": {"login": "reviewer-bob"},
 												"body": "This needs error handling for the nil case",
 												"diffHunk": "@@ -10,3 +12,5 @@\n resp, err := client.Do(req)",
-												"createdAt": "2026-03-01T02:00:00Z"
+												"createdAt": "` + d2 + `"
 											}
 										]
 									}
@@ -93,7 +106,7 @@ func ReviewActivityResponse() string {
 												"author": {"login": "reviewer-alice"},
 												"body": "Prefer const over let for immutable bindings",
 												"diffHunk": "@@ -20,1 +22,1 @@\n-let x = 5;\n+const x = 5;",
-												"createdAt": "2026-03-01T03:00:00Z"
+												"createdAt": "` + d3 + `"
 											}
 										]
 									}
@@ -112,7 +125,16 @@ func ReviewActivityResponse() string {
 // (alice: 3 comments, bob: 2, charlie: 1) plus dependabot[bot] in both
 // reviews and comments. Supports testing --top N filtering, bot filtering
 // on reviews, totalComments, and CSV ranking order.
+// Dates are generated relative to now so they always fall within the default 3-month --since window.
 func MultiReviewerResponse() string {
+	d0 := recentDate(30)
+	d1 := recentDate(29)
+	d2 := recentDate(28)
+	d3 := recentDate(27)
+	d4 := recentDate(26)
+	d5 := recentDate(25)
+	d6 := recentDate(24)
+	d7 := recentDate(23)
 	return `{
 		"data": {
 			"repository": {
@@ -124,23 +146,23 @@ func MultiReviewerResponse() string {
 							"title": "Big refactor",
 							"url": "https://github.com/test-org/test-repo/pull/100",
 							"state": "MERGED",
-							"updatedAt": "2026-03-01T00:00:00Z",
+							"updatedAt": "` + d0 + `",
 							"author": {"login": "pr-author"},
 							"reviews": {
 								"nodes": [
-									{"author": {"login": "reviewer-alice"}, "state": "APPROVED", "createdAt": "2026-03-01T01:00:00Z"},
-									{"author": {"login": "reviewer-bob"}, "state": "CHANGES_REQUESTED", "createdAt": "2026-03-01T02:00:00Z"},
-									{"author": {"login": "reviewer-charlie"}, "state": "APPROVED", "createdAt": "2026-03-01T03:00:00Z"},
-									{"author": {"login": "dependabot[bot]"}, "state": "APPROVED", "createdAt": "2026-03-01T04:00:00Z"}
+									{"author": {"login": "reviewer-alice"}, "state": "APPROVED", "createdAt": "` + d1 + `"},
+									{"author": {"login": "reviewer-bob"}, "state": "CHANGES_REQUESTED", "createdAt": "` + d2 + `"},
+									{"author": {"login": "reviewer-charlie"}, "state": "APPROVED", "createdAt": "` + d3 + `"},
+									{"author": {"login": "dependabot[bot]"}, "state": "APPROVED", "createdAt": "` + d4 + `"}
 								]
 							},
 							"reviewThreads": {
 								"nodes": [
-									{"comments": {"nodes": [{"author": {"login": "reviewer-alice"}, "body": "Use early return", "diffHunk": "@@ -1,3 +1,5 @@\n+if err != nil {", "createdAt": "2026-03-01T01:00:00Z"}]}},
-									{"comments": {"nodes": [{"author": {"login": "reviewer-alice"}, "body": "Prefer const", "diffHunk": "@@ -10,1 +10,1 @@\n-let x = 5;", "createdAt": "2026-03-01T01:30:00Z"}]}},
-									{"comments": {"nodes": [{"author": {"login": "reviewer-bob"}, "body": "Handle nil case", "diffHunk": "@@ -20,3 +22,5 @@\n resp, err := client.Do(req)", "createdAt": "2026-03-01T02:00:00Z"}]}},
-									{"comments": {"nodes": [{"author": {"login": "reviewer-charlie"}, "body": "Add docs", "diffHunk": "@@ -30,1 +32,1 @@\n+// TODO", "createdAt": "2026-03-01T03:00:00Z"}]}},
-									{"comments": {"nodes": [{"author": {"login": "dependabot[bot]"}, "body": "Dep update safe", "diffHunk": "@@ -1,1 +1,1 @@\n-v1.0\n+v1.1", "createdAt": "2026-03-01T04:00:00Z"}]}}
+									{"comments": {"nodes": [{"author": {"login": "reviewer-alice"}, "body": "Use early return", "diffHunk": "@@ -1,3 +1,5 @@\n+if err != nil {", "createdAt": "` + d1 + `"}]}},
+									{"comments": {"nodes": [{"author": {"login": "reviewer-alice"}, "body": "Prefer const", "diffHunk": "@@ -10,1 +10,1 @@\n-let x = 5;", "createdAt": "` + d2 + `"}]}},
+									{"comments": {"nodes": [{"author": {"login": "reviewer-bob"}, "body": "Handle nil case", "diffHunk": "@@ -20,3 +22,5 @@\n resp, err := client.Do(req)", "createdAt": "` + d2 + `"}]}},
+									{"comments": {"nodes": [{"author": {"login": "reviewer-charlie"}, "body": "Add docs", "diffHunk": "@@ -30,1 +32,1 @@\n+// TODO", "createdAt": "` + d3 + `"}]}},
+									{"comments": {"nodes": [{"author": {"login": "dependabot[bot]"}, "body": "Dep update safe", "diffHunk": "@@ -1,1 +1,1 @@\n-v1.0\n+v1.1", "createdAt": "` + d4 + `"}]}}
 								]
 							}
 						},
@@ -149,18 +171,18 @@ func MultiReviewerResponse() string {
 							"title": "Small fix",
 							"url": "https://github.com/test-org/test-repo/pull/101",
 							"state": "MERGED",
-							"updatedAt": "2026-03-02T00:00:00Z",
+							"updatedAt": "` + d5 + `",
 							"author": {"login": "pr-author"},
 							"reviews": {
 								"nodes": [
-									{"author": {"login": "reviewer-alice"}, "state": "APPROVED", "createdAt": "2026-03-02T01:00:00Z"},
-									{"author": {"login": "reviewer-bob"}, "state": "APPROVED", "createdAt": "2026-03-02T02:00:00Z"}
+									{"author": {"login": "reviewer-alice"}, "state": "APPROVED", "createdAt": "` + d6 + `"},
+									{"author": {"login": "reviewer-bob"}, "state": "APPROVED", "createdAt": "` + d7 + `"}
 								]
 							},
 							"reviewThreads": {
 								"nodes": [
-									{"comments": {"nodes": [{"author": {"login": "reviewer-alice"}, "body": "LGTM with nit", "diffHunk": "@@ -5,1 +5,1 @@\n-old\n+new", "createdAt": "2026-03-02T01:00:00Z"}]}},
-									{"comments": {"nodes": [{"author": {"login": "reviewer-bob"}, "body": "Typo here", "diffHunk": "@@ -8,1 +8,1 @@\n-colour\n+color", "createdAt": "2026-03-02T02:00:00Z"}]}}
+									{"comments": {"nodes": [{"author": {"login": "reviewer-alice"}, "body": "LGTM with nit", "diffHunk": "@@ -5,1 +5,1 @@\n-old\n+new", "createdAt": "` + d6 + `"}]}},
+									{"comments": {"nodes": [{"author": {"login": "reviewer-bob"}, "body": "Typo here", "diffHunk": "@@ -8,1 +8,1 @@\n-colour\n+color", "createdAt": "` + d7 + `"}]}}
 								]
 							}
 						}
@@ -183,7 +205,12 @@ func RepoNotFoundError(org, repo string) string {
 
 // ReviewActivityWithBotResponse includes a bot reviewer and bot commenter
 // alongside human reviewers, for testing bot filtering.
+// Dates are generated relative to now so they always fall within the default 3-month --since window.
 func ReviewActivityWithBotResponse() string {
+	d0 := recentDate(30)
+	d1 := recentDate(29)
+	d2 := recentDate(28)
+	d3 := recentDate(27)
 	return `{
 		"data": {
 			"repository": {
@@ -194,13 +221,13 @@ func ReviewActivityWithBotResponse() string {
 						"title": "Add feature X",
 						"url": "https://github.com/test-org/test-repo/pull/42",
 						"state": "MERGED",
-						"updatedAt": "2026-03-01T00:00:00Z",
+						"updatedAt": "` + d0 + `",
 						"author": {"login": "pr-author"},
 						"reviews": {
 							"nodes": [
-								{"author": {"login": "reviewer-alice"}, "state": "APPROVED", "createdAt": "2026-03-01T01:00:00Z"},
-								{"author": {"login": "reviewer-bob"}, "state": "CHANGES_REQUESTED", "createdAt": "2026-03-01T02:00:00Z"},
-								{"author": {"login": "dependabot[bot]"}, "state": "APPROVED", "createdAt": "2026-03-01T03:00:00Z"}
+								{"author": {"login": "reviewer-alice"}, "state": "APPROVED", "createdAt": "` + d1 + `"},
+								{"author": {"login": "reviewer-bob"}, "state": "CHANGES_REQUESTED", "createdAt": "` + d2 + `"},
+								{"author": {"login": "dependabot[bot]"}, "state": "APPROVED", "createdAt": "` + d3 + `"}
 							]
 						},
 						"reviewThreads": {
@@ -212,7 +239,7 @@ func ReviewActivityWithBotResponse() string {
 												"author": {"login": "reviewer-alice"},
 												"body": "Consider using early return here to reduce nesting",
 												"diffHunk": "@@ -1,3 +1,5 @@\n func foo() {\n+  if err != nil {\n+    return err\n+  }",
-												"createdAt": "2026-03-01T01:00:00Z"
+												"createdAt": "` + d1 + `"
 											}
 										]
 									}
@@ -224,7 +251,7 @@ func ReviewActivityWithBotResponse() string {
 												"author": {"login": "reviewer-bob"},
 												"body": "This needs error handling for the nil case",
 												"diffHunk": "@@ -10,3 +12,5 @@\n resp, err := client.Do(req)",
-												"createdAt": "2026-03-01T02:00:00Z"
+												"createdAt": "` + d2 + `"
 											}
 										]
 									}
@@ -236,7 +263,7 @@ func ReviewActivityWithBotResponse() string {
 												"author": {"login": "dependabot[bot]"},
 												"body": "This dependency update is safe to merge",
 												"diffHunk": "@@ -1,1 +1,1 @@\n-dep: v1.0.0\n+dep: v1.1.0",
-												"createdAt": "2026-03-01T03:00:00Z"
+												"createdAt": "` + d3 + `"
 											}
 										]
 									}
@@ -248,7 +275,7 @@ func ReviewActivityWithBotResponse() string {
 												"author": {"login": "reviewer-alice"},
 												"body": "Prefer const over let for immutable bindings",
 												"diffHunk": "@@ -20,1 +22,1 @@\n-let x = 5;\n+const x = 5;",
-												"createdAt": "2026-03-01T03:00:00Z"
+												"createdAt": "` + d3 + `"
 											}
 										]
 									}

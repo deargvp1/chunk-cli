@@ -205,19 +205,17 @@ func TestFetchReviewActivity(t *testing.T) {
 
 	t.Run("since filter", func(t *testing.T) {
 		gh.SetReviewActivity("since-repo", fixtures.MultiReviewerResponse())
-		// Set since between PR 100 reviews (2026-03-01T01-03) and PR 101 reviews (2026-03-02T01-02).
-		// PR 100's updatedAt is 2026-03-01T00:00:00Z which is before since, so the
-		// function will return early after processing PR 100 (which has no reviews/comments after since).
-		// PR 101's updatedAt is 2026-03-02T00:00:00Z — but the fixture lists PR 100 first.
-		// The early return means only PR 100 is seen; its reviews are all before since.
-		since := time.Date(2026, 3, 1, 23, 0, 0, 0, time.UTC)
+		// The fixture lists PR 100 first (updatedAt ~30 days ago) then PR 101 (~25 days ago).
+		// Setting since to tomorrow means PR 100's updatedAt is before since, triggering
+		// an early return before any reviews are processed.
+		since := time.Now().AddDate(0, 0, 1)
 		result, err := c.FetchReviewActivity(context.Background(), "org", "since-repo", since)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// PR 100 (first in fixture) has updatedAt=2026-03-01T00:00:00Z which is before since,
-		// so the function returns early with no activity (reviews at T01-T03 are all before since too).
+		// PR 100 (first in fixture) has updatedAt ~30 days ago, which is before since (tomorrow),
+		// so the function returns early with no activity.
 		if len(result.Activity) != 0 {
 			t.Errorf("expected 0 reviewers (early return), got %d", len(result.Activity))
 		}
