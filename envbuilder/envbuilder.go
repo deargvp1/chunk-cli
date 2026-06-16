@@ -387,6 +387,16 @@ func compareVersions(a, b string) int {
 	return 0
 }
 
+func nodeInstallCmd(major string) string {
+	if major == "" || major == stackUnknown {
+		major = "22"
+	}
+	return fmt.Sprintf(
+		"curl -fsSL https://deb.nodesource.com/setup_%s.x | sudo -E bash - && sudo apt-get install -y nodejs --no-install-recommends && sudo rm -rf /var/lib/apt/lists/*",
+		major,
+	)
+}
+
 var extraDepInstalls = map[string]string{
 	"uv":          "pip install uv",
 	"pipenv":      "pip install pipenv",
@@ -1927,13 +1937,23 @@ func DetectEnvironment(ctx context.Context, dir string) (*Environment, error) {
 
 	var sysCmds []string
 	for _, dep := range systemDeps {
-		if cmd, ok := extraDepInstalls[dep]; ok {
+		var cmd string
+		if dep == "node" {
+			// Use the detected major version to pick the right NodeSource stream.
+			// sudo is already explicit in nodeInstallCmd, so we skip the cimg
+			// substitution below to avoid double-sudo on apt-get.
+			major := strings.SplitN(imageVersion, ".", 2)[0]
+			cmd = nodeInstallCmd(major)
+		} else if c, ok := extraDepInstalls[dep]; ok {
+			cmd = c
 			if strings.HasPrefix(image, cimgPrefix) {
 				cmd = strings.ReplaceAll(cmd, "apt-get", "sudo apt-get")
 				cmd = strings.ReplaceAll(cmd, "rm -rf /var/lib/apt/lists/*", "sudo rm -rf /var/lib/apt/lists/*")
 				cmd = strings.ReplaceAll(cmd, "locale-gen", "sudo locale-gen")
 				cmd = strings.ReplaceAll(cmd, "update-locale", "sudo update-locale")
 			}
+		}
+		if cmd != "" {
 			sysCmds = append(sysCmds, cmd)
 		}
 	}

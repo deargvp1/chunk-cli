@@ -448,6 +448,29 @@ func TestDetectGoDartSassDep(t *testing.T) {
 	})
 }
 
+func TestNodeInstallCmd(t *testing.T) {
+	t.Parallel()
+
+	t.Run("uses detected major version", func(t *testing.T) {
+		t.Parallel()
+		cmd := nodeInstallCmd("22")
+		assert.Assert(t, strings.Contains(cmd, "setup_22.x"), "expected setup_22.x in command, got: %s", cmd)
+		assert.Assert(t, strings.Contains(cmd, "nodejs"), "expected nodejs in command, got: %s", cmd)
+	})
+
+	t.Run("empty version falls back to 22", func(t *testing.T) {
+		t.Parallel()
+		cmd := nodeInstallCmd("")
+		assert.Assert(t, strings.Contains(cmd, "setup_22.x"), "expected setup_22.x fallback, got: %s", cmd)
+	})
+
+	t.Run("unknown version falls back to 22", func(t *testing.T) {
+		t.Parallel()
+		cmd := nodeInstallCmd(stackUnknown)
+		assert.Assert(t, strings.Contains(cmd, "setup_22.x"), "expected setup_22.x fallback for unknown, got: %s", cmd)
+	})
+}
+
 func TestDetectNodeTestCommand(t *testing.T) {
 	t.Parallel()
 
