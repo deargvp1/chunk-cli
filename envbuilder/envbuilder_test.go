@@ -469,6 +469,12 @@ func TestNodeInstallCmd(t *testing.T) {
 		cmd := nodeInstallCmd(stackUnknown)
 		assert.Assert(t, strings.Contains(cmd, "setup_22.x"), "expected setup_22.x fallback for unknown, got: %s", cmd)
 	})
+
+	t.Run("non-numeric version falls back to 22", func(t *testing.T) {
+		t.Parallel()
+		cmd := nodeInstallCmd("unknown") // e.g. from splitting "unknown.0"
+		assert.Assert(t, strings.Contains(cmd, "setup_22.x"), "expected setup_22.x fallback for non-numeric, got: %s", cmd)
+	})
 }
 
 func TestDetectNodeTestCommand(t *testing.T) {

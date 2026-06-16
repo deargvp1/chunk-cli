@@ -388,7 +388,12 @@ func compareVersions(a, b string) int {
 }
 
 func nodeInstallCmd(major string) string {
+	// Require a purely numeric major version so we never produce an invalid
+	// NodeSource URL (e.g. "unknown" from a failed version detection).
 	if major == "" || major == stackUnknown {
+		major = "22"
+	}
+	if _, err := strconv.Atoi(major); err != nil {
 		major = "22"
 	}
 	return fmt.Sprintf(
@@ -1939,9 +1944,6 @@ func DetectEnvironment(ctx context.Context, dir string) (*Environment, error) {
 	for _, dep := range systemDeps {
 		var cmd string
 		if dep == "node" {
-			// Use the detected major version to pick the right NodeSource stream.
-			// sudo is already explicit in nodeInstallCmd, so we skip the cimg
-			// substitution below to avoid double-sudo on apt-get.
 			major := strings.SplitN(imageVersion, ".", 2)[0]
 			cmd = nodeInstallCmd(major)
 		} else if c, ok := extraDepInstalls[dep]; ok {

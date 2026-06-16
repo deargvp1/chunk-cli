@@ -157,7 +157,7 @@ func validateNeedsSidecar(explicitRemote bool, cfg *config.ProjectConfig, hook *
 	return hook != nil && cfg.HasSidecarImage()
 }
 
-func maybeEnsureCircleCIClient(ctx context.Context, cmd *cobra.Command, rc config.ResolvedConfig, needsSidecar bool, cfg *config.ProjectConfig, streams iostream.Streams) (*circleci.Client, error) {
+func maybeEnsureCircleCIClient(ctx context.Context, cmd *cobra.Command, rc config.ResolvedConfig, needsSidecar bool, streams iostream.Streams) (*circleci.Client, error) {
 	if !needsSidecar {
 		return nil, nil
 	}
@@ -218,10 +218,8 @@ func runValidateCmdE(cmd *cobra.Command, args []string, opts *validateOpts) erro
 
 	// Validate --env flag syntax before any remote resolution so bad
 	// values are caught immediately regardless of execution mode.
-	if len(opts.envVarsFlag) > 0 {
-		if _, vErr := sidecar.ParseEnvPairs(opts.envVarsFlag); vErr != nil {
-			return &userError{msg: fmt.Sprintf("invalid --env value: %s", vErr), err: vErr}
-		}
+	if err := validateEnvFlag(opts.envVarsFlag); err != nil {
+		return err
 	}
 
 	if opts.dryRun {
@@ -252,7 +250,7 @@ func runValidateCmdE(cmd *cobra.Command, args []string, opts *validateOpts) erro
 
 	image := resolveImage(name, cfg)
 
-	circleCIClient, err := maybeEnsureCircleCIClient(cmd.Context(), cmd, rc, needsSidecar, cfg, streams)
+	circleCIClient, err := maybeEnsureCircleCIClient(cmd.Context(), cmd, rc, needsSidecar, streams)
 	if err != nil {
 		return err
 	}
@@ -286,6 +284,16 @@ func runValidateCmdE(cmd *cobra.Command, args []string, opts *validateOpts) erro
 		return validate.WrapHookResult(hook.sessionID, execErr, maxAttempts, streams.Err)
 	}
 	return execErr
+}
+
+func validateEnvFlag(envVarsFlag []string) error {
+	if len(envVarsFlag) == 0 {
+		return nil
+	}
+	if _, vErr := sidecar.ParseEnvPairs(envVarsFlag); vErr != nil {
+		return &userError{msg: fmt.Sprintf("invalid --env value: %s", vErr), err: vErr}
+	}
+	return nil
 }
 
 func runValidateDryRun(name, inlineCmd string, cfg *config.ProjectConfig, statusFn iostream.StatusFunc) error {
