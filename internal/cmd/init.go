@@ -368,6 +368,24 @@ func printTestSuitesHint(workDir string, streams iostream.Streams) {
 	streams.ErrPrintln(ui.Dim("  Or rerun with --skip-test-suites=false to use built-in Go/pytest templates."))
 }
 
+// writeAllHookFiles writes hook config files for all supported agents.
+// Cursor reads .claude/settings.json natively so no extra file is needed for it.
+// Codex hooks are only written when Codex is installed or the project already
+// has a .codex directory.
+func writeAllHookFiles(workDir string, commands []config.Command, streams iostream.Streams) error {
+	if err := writeSettings(workDir, commands, streams, tui.Confirm); err != nil {
+		return err
+	}
+	homeDir := os.Getenv(config.EnvHome)
+	_, codexDirErr := os.Stat(filepath.Join(workDir, ".codex"))
+	if codexInstalled(homeDir) || codexDirErr == nil {
+		if err := writeCodexHooks(workDir, commands, streams, tui.Confirm); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func newInitCmd() *cobra.Command {
 	var force, skipHooks, skipValidate, skipCompletions, skipSkills, skipTestSuites bool
 	var projectDir string
@@ -462,19 +480,9 @@ hook config files.`,
 			}
 
 			// Step 3: Write hook config files for supported agents.
-			// Cursor reads .claude/settings.json natively — no extra file needed.
 			if !skipHooks {
-				if err := writeSettings(workDir, cfg.Commands, streams, tui.Confirm); err != nil {
+				if err := writeAllHookFiles(workDir, cfg.Commands, streams); err != nil {
 					return err
-				}
-				// Write Codex hooks only when Codex is installed or the project
-				// already has a .codex directory (re-running init should update it).
-				homeDir := os.Getenv(config.EnvHome)
-				_, codexDirErr := os.Stat(filepath.Join(workDir, ".codex"))
-				if codexInstalled(homeDir) || codexDirErr == nil {
-					if err := writeCodexHooks(workDir, cfg.Commands, streams, tui.Confirm); err != nil {
-						return err
-					}
 				}
 			}
 
