@@ -220,7 +220,8 @@ func TestWriteCodexHooksExistingMergeApplied(t *testing.T) {
 	var merged map[string]interface{}
 	assert.NilError(t, json.Unmarshal(data, &merged))
 
-	hooks := merged["hooks"].(map[string]interface{})
+	hooks, ok := merged["hooks"].(map[string]interface{})
+	assert.Assert(t, ok, "expected hooks to be a map")
 	// Existing PostToolUse preserved.
 	assert.Assert(t, hooks["PostToolUse"] != nil)
 	// New PreToolUse and Stop hooks added.

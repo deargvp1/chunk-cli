@@ -127,7 +127,7 @@ func BuildCodex(commands []config.Command) ([]byte, error) {
 		for _, cmd := range commands {
 			t := cmd.Timeout
 			if t == 0 {
-				t = 300
+				t = 60
 			}
 			stopTimeout += t
 		}

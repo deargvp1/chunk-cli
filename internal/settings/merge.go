@@ -274,15 +274,10 @@ func MergeCodex(existing, generated []byte) (*MergeResult, error) {
 		return nil, fmt.Errorf("marshal original hooks: %w", err)
 	}
 
-	var merged map[string]interface{}
-	if err := json.Unmarshal(originalBytes, &merged); err != nil {
-		return nil, fmt.Errorf("copy existing hooks: %w", err)
-	}
+	mergeHooks(existingMap, generatedMap)
+	mergeStopHooks(existingMap, generatedMap)
 
-	mergeHooks(merged, generatedMap)
-	mergeStopHooks(merged, generatedMap)
-
-	mergedBytes, err := json.MarshalIndent(merged, "", "  ")
+	mergedBytes, err := json.MarshalIndent(existingMap, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("marshal merged hooks: %w", err)
 	}
