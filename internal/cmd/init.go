@@ -127,6 +127,21 @@ func writeSettings(workDir string, commands []config.Command, streams iostream.S
 	return nil
 }
 
+// codexInstalled reports whether Codex appears to be installed on this machine.
+// It checks for the binary on PATH and for the global ~/.codex settings directory.
+func codexInstalled(homeDir string) bool {
+	if _, err := exec.LookPath("codex"); err == nil {
+		return true
+	}
+	if homeDir == "" {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(homeDir, ".codex")); err == nil {
+		return true
+	}
+	return false
+}
+
 // writeCodexHooks writes .codex/hooks.json for the project.
 // Uses the same merge/confirm/fallback pattern as writeSettings.
 func writeCodexHooks(workDir string, commands []config.Command, streams iostream.Streams, confirm confirmFunc) error {
@@ -451,8 +466,14 @@ hook config files.`,
 				if err := writeSettings(workDir, cfg.Commands, streams, tui.Confirm); err != nil {
 					return err
 				}
-				if err := writeCodexHooks(workDir, cfg.Commands, streams, tui.Confirm); err != nil {
-					return err
+				// Write Codex hooks only when Codex is installed or the project
+				// already has a .codex directory (re-running init should update it).
+				homeDir := os.Getenv(config.EnvHome)
+				_, codexDirErr := os.Stat(filepath.Join(workDir, ".codex"))
+				if codexInstalled(homeDir) || codexDirErr == nil {
+					if err := writeCodexHooks(workDir, cfg.Commands, streams, tui.Confirm); err != nil {
+						return err
+					}
 				}
 			}
 
