@@ -157,7 +157,7 @@ func validateNeedsSidecar(explicitRemote bool, cfg *config.ProjectConfig, hook *
 	return hook != nil && cfg.HasSidecarImage()
 }
 
-func maybeEnsureCircleCIClient(ctx context.Context, cmd *cobra.Command, rc config.ResolvedConfig, needsSidecar bool, cfg *config.ProjectConfig, streams iostream.Streams) (*circleci.Client, error) {
+func maybeEnsureCircleCIClient(ctx context.Context, cmd *cobra.Command, rc config.ResolvedConfig, needsSidecar bool, streams iostream.Streams) (*circleci.Client, error) {
 	if !needsSidecar {
 		return nil, nil
 	}
@@ -205,10 +205,10 @@ func runValidateCmdE(cmd *cobra.Command, args []string, opts *validateOpts) erro
 	}
 
 	cfg, err := config.LoadProjectConfig(workDir)
-	if hook != nil && (err != nil || !cfg.HasCommands()) && opts.inlineCmd == "" {
-		return nil // no config in hook context: skip silently
-	}
 	if (err != nil || !cfg.HasCommands()) && opts.inlineCmd == "" {
+		if hook != nil {
+			return nil // no config in hook context: skip silently
+		}
 		return &userError{
 			msg:        "No validate commands configured.",
 			suggestion: "Run 'chunk init' first.",
@@ -252,7 +252,7 @@ func runValidateCmdE(cmd *cobra.Command, args []string, opts *validateOpts) erro
 
 	image := resolveImage(name, cfg)
 
-	circleCIClient, err := maybeEnsureCircleCIClient(cmd.Context(), cmd, rc, needsSidecar, cfg, streams)
+	circleCIClient, err := maybeEnsureCircleCIClient(cmd.Context(), cmd, rc, needsSidecar, streams)
 	if err != nil {
 		return err
 	}
