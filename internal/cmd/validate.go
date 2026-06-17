@@ -216,12 +216,8 @@ func runValidateCmdE(cmd *cobra.Command, args []string, opts *validateOpts) erro
 		}
 	}
 
-	// Validate --env flag syntax before any remote resolution so bad
-	// values are caught immediately regardless of execution mode.
-	if len(opts.envVarsFlag) > 0 {
-		if _, vErr := sidecar.ParseEnvPairs(opts.envVarsFlag); vErr != nil {
-			return &userError{msg: fmt.Sprintf("invalid --env value: %s", vErr), err: vErr}
-		}
+	if err := validateEnvFlag(opts.envVarsFlag); err != nil {
+		return err
 	}
 
 	if opts.dryRun {
@@ -286,6 +282,13 @@ func runValidateCmdE(cmd *cobra.Command, args []string, opts *validateOpts) erro
 		return validate.WrapHookResult(hook.sessionID, execErr, maxAttempts, streams.Err)
 	}
 	return execErr
+}
+
+func validateEnvFlag(envVarsFlag []string) error {
+	if _, err := sidecar.ParseEnvPairs(envVarsFlag); err != nil {
+		return &userError{msg: fmt.Sprintf("invalid --env value: %s", err), err: err}
+	}
+	return nil
 }
 
 func runValidateDryRun(name, inlineCmd string, cfg *config.ProjectConfig, statusFn iostream.StatusFunc) error {
