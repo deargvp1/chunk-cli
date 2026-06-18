@@ -254,7 +254,7 @@ func runValidateCmdE(cmd *cobra.Command, args []string, opts *validateOpts) erro
 		return err
 	}
 
-	freshlyCreated, err := setupRemote(ctx, circleCIClient, opts, image, cfg, hook, activeSidecar != nil, statusFn, workDir, streams)
+	freshlyCreated, err := setupRemote(ctx, circleCIClient, opts, image, cfg, hook, activeSidecar, statusFn, workDir, streams)
 	if err != nil {
 		return err
 	}
@@ -400,8 +400,8 @@ func runValidate(ctx context.Context, client *circleci.Client, rc config.Resolve
 
 // setupRemote resolves (or creates) the sidecar ID based on the validate flags
 // and config, then returns whether a new sidecar was provisioned.
-func setupRemote(ctx context.Context, client *circleci.Client, opts *validateOpts, image string, cfg *config.ProjectConfig, hook *hookContext, hasActiveSidecar bool, statusFn iostream.StatusFunc, workDir string, streams iostream.Streams) (bool, error) {
-	if validateNeedsSidecar(opts.remote || opts.sidecarID != "", cfg, hook, hasActiveSidecar) {
+func setupRemote(ctx context.Context, client *circleci.Client, opts *validateOpts, image string, cfg *config.ProjectConfig, hook *hookContext, activeSidecar *sidecar.ActiveSidecar, statusFn iostream.StatusFunc, workDir string, streams iostream.Streams) (bool, error) {
+	if validateNeedsSidecar(opts.remote || opts.sidecarID != "", cfg, hook, activeSidecar != nil) {
 		if opts.remote {
 			created, err := resolveOrCreateSidecarID(ctx, client, &opts.sidecarID, opts.orgID, image, workDir, streams)
 			if err != nil {
@@ -410,7 +410,7 @@ func setupRemote(ctx context.Context, client *circleci.Client, opts *validateOpt
 			statusFn(iostream.LevelInfo, fmt.Sprintf("running all commands on sidecar %s", opts.sidecarID))
 			return created, nil
 		}
-		return resolveSidecar(ctx, client, &opts.sidecarID, opts.orgID, image, workDir, hook, streams), nil
+		return resolveSidecar(ctx, client, &opts.sidecarID, opts.orgID, image, workDir, hook, activeSidecar, streams), nil
 	}
 	return false, nil
 }
@@ -574,12 +574,12 @@ func resolveImage(name string, cfg *config.ProjectConfig) string {
 
 // resolveSidecar fills sidecarID for per-command remote routing
 // (i.e. when --remote is not set but some commands have Remote:true).
-// It uses the active sidecar when available, auto-creates one when a sidecar
-// image is configured or the caller is a Stop hook, and warns otherwise.
+// It uses the active sidecar when available, auto-creates one when the
+// caller is a Stop hook, and warns otherwise.
 // Returns true when a brand-new sidecar was provisioned in this call.
-func resolveSidecar(ctx context.Context, client *circleci.Client, sidecarID *string, orgID, image, workDir string, hook *hookContext, streams iostream.Streams) bool {
+func resolveSidecar(ctx context.Context, client *circleci.Client, sidecarID *string, orgID, image, workDir string, hook *hookContext, active *sidecar.ActiveSidecar, streams iostream.Streams) bool {
 	statusFn := newStatusFunc(streams)
-	if active, err := sidecar.LoadActive(ctx); err == nil && active != nil {
+	if active != nil {
 		*sidecarID = active.SidecarID
 		statusFn(iostream.LevelInfo, fmt.Sprintf("using sidecar %s for remote commands", *sidecarID))
 		return false
