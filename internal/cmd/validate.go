@@ -157,6 +157,20 @@ func validateNeedsSidecar(explicitRemote bool, cfg *config.ProjectConfig, hook *
 	return cfg.HasSidecarImage() && (hook != nil || hasActiveSidecar)
 }
 
+func loadSidecarEnvVars(ctx context.Context, client *circleci.Client, opts *validateOpts, workDir string, statusFn iostream.StatusFunc) (map[string]string, error) {
+	if opts.sidecarID == "" {
+		return nil, nil
+	}
+	envVars, err := resolveEnvVars(ctx, workDir, opts.envFile, opts.envVarsFlag)
+	if err != nil {
+		return nil, err
+	}
+	if err := syncToSidecar(ctx, client, opts.sidecarID, opts.identityFile, opts.workdir, statusFn); err != nil {
+		return nil, err
+	}
+	return envVars, nil
+}
+
 func maybeEnsureCircleCIClient(ctx context.Context, cmd *cobra.Command, rc config.ResolvedConfig, needsSidecar bool, streams iostream.Streams) (*circleci.Client, error) {
 	if !needsSidecar {
 		return nil, nil
@@ -262,15 +276,9 @@ func runValidateCmdE(cmd *cobra.Command, args []string, opts *validateOpts) erro
 	// Only load env vars and resolve secrets when a sidecar is actually
 	// being used — avoids parsing .env.local or hitting secrets APIs on
 	// purely local runs.
-	var envVars map[string]string
-	if opts.sidecarID != "" {
-		envVars, err = resolveEnvVars(ctx, workDir, opts.envFile, opts.envVarsFlag)
-		if err != nil {
-			return err
-		}
-		if err := syncToSidecar(ctx, circleCIClient, opts.sidecarID, opts.identityFile, opts.workdir, statusFn); err != nil {
-			return err
-		}
+	envVars, err := loadSidecarEnvVars(ctx, circleCIClient, opts, workDir, statusFn)
+	if err != nil {
+		return err
 	}
 
 	execErr := runValidate(ctx, circleCIClient, rc, workDir, name, opts.inlineCmd, opts.save, opts.sidecarID, freshlyCreated, opts.identityFile, opts.workdir, allRemote, envVars, cfg, statusFn, streams)
