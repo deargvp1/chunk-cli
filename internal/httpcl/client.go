@@ -82,14 +82,14 @@ func New(cfg Config) *Client {
 	rc.Logger = nil // suppress default log output
 
 	if cfg.RetryOn429Budget > 0 {
-		// Raise RetryMax to accommodate 429 retries. The CheckRetry below caps
-		// non-429 retries at the original limit so 5xx behaviour is unchanged.
-		rc.RetryMax = 30
 		budget := cfg.RetryOn429Budget
 		origMax := 3
 		if cfg.DisableRetries {
 			origMax = 0
 		}
+		// Raise RetryMax so it never binds before the budget does.
+		// Each 429 retry consumes ≥1s (Retry-After floor), so budget/s + origMax is sufficient.
+		rc.RetryMax = int(budget/time.Second) + origMax
 		rc.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
 			state, _ := ctx.Value(retryCtxKey{}).(*retryState)
 			if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
@@ -171,13 +171,10 @@ func (c *Client) Call(ctx context.Context, r Request) (int, error) {
 		bodyReader = bytes.NewReader(b)
 	}
 
-	if c.retryOn429Budget > 0 {
-		ctx = context.WithValue(ctx, retryCtxKey{}, &retryState{start: time.Now()})
-	}
-	// When 429 retry is enabled, extend the deadline to accommodate retry waits.
 	ctxTimeout := c.timeout
 	if c.retryOn429Budget > 0 {
-		ctxTimeout = c.retryOn429Budget + c.timeout
+		ctx = context.WithValue(ctx, retryCtxKey{}, &retryState{start: time.Now()})
+		ctxTimeout = c.retryOn429Budget + c.timeout // extend deadline to cover retry waits
 	}
 	ctx, cancel := context.WithTimeout(ctx, ctxTimeout)
 	defer cancel()

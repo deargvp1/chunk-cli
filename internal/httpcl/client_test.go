@@ -254,6 +254,32 @@ func TestRetryOn429_DisabledByDefault(t *testing.T) {
 	}
 }
 
+func TestRetryOn429_5xxStillCapsAtThreeWithBudgetSet(t *testing.T) {
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := hc.New(hc.Config{
+		BaseURL:          srv.URL,
+		RetryOn429Budget: 30 * time.Second,
+	})
+
+	_, err := c.Call(context.Background(), hc.NewRequest("GET", "/"))
+	if err == nil {
+		t.Fatal("expected error for 500")
+	}
+	if hc.IsRateLimitError(err) {
+		t.Fatalf("expected plain HTTPError for 500, got RateLimitError")
+	}
+	if n := attempts.Load(); n != 4 {
+		t.Fatalf("expected 4 attempts (1 + 3 retries), got %d", n)
+	}
+}
+
 func TestRouteParamsMultiple(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v2/agents/org/org-1/project/proj-2/runs" {
